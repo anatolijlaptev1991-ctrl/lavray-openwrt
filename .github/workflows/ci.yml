@@ -1,0 +1,58 @@
+# CI LAVRay (OpenWrt) — заготовка Этапа 2.
+#
+# Stage 3: сборка приложения — здесь появятся jobs сборки Go-ядра, пакетов .ipk
+# в контейнере OpenWrt SDK и публикации релиза. Пока включены только линт-проверки
+# структуры репозитория.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    name: Линт структуры и Markdown
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Сабмодуль lavray ещё не добавлен (общий репозиторий подключается Этапом 3):
+      # git submodule add https://github.com/anatolijlaptev1991-ctrl/lavray.git lavray
+      # После добавления раскомментировать:
+      # - uses: actions/checkout@v4
+      #   with:
+      #     submodules: recursive
+
+      - name: Проверка структуры репозитория
+        run: |
+          set -eu
+          test -f LICENSE    || { echo "Нет LICENSE"; exit 1; }
+          test -f README.md || { echo "Нет README.md"; exit 1; }
+          test -f .github/workflows/ci.yml || { echo "Нет ci.yml"; exit 1; }
+          test -f .github/ISSUE_TEMPLATE/bug_report.md    || { echo "Нет bug_report.md"; exit 1; }
+          test -f .github/ISSUE_TEMPLATE/feature_request.md || { echo "Нет feature_request.md"; exit 1; }
+          echo "Структура OK"
+
+      - name: Проверка Markdown
+        run: |
+          set -eu
+          fail=0
+          while IFS= read -r -d '' f; do
+            # Незакрытые блоки кода (нечётное число ``` в файле)
+            n=$(grep -c '^```' "$f" || true)
+            if [ $((n % 2)) -ne 0 ]; then
+              echo "::error file=$f::Нечётное число ограждений кода (\`\`\`)"
+              fail=1
+            fi
+          done < <(find . -name '*.md' -not -path './.git/*' -print0)
+          exit $fail
+
+  build:
+    name: Сборка (Stage 3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder
+        run: echo "Stage 3: сборка приложения — job будет добавлен на этапе реализации."
