@@ -55,4 +55,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Placeholder
-        run: echo "Stage 3: сборка приложения — job будет добавлен на этапе реализации."
+        run: 'echo "Stage 3: сборка приложения — job будет добавлен на этапе реализации."'
