@@ -1,49 +1,125 @@
-# LAVRay для OpenWrt
+# LAVRay for OpenWrt
 
-Платформенный репозиторий LAVRay на OpenWrt: демон под procd, пакеты .ipk, веб-панель,
-LuCI-приложение, opkg-feed и сборка в OpenWrt SDK. Общая кодовая база (Go-ядро, React UI)
-живёт в [**lavray**](https://github.com/anatolijlaptev1991-ctrl/lavray) и подключается
-сюда git-сабмодулем на зафиксированном коммите.
+[![CI](https://github.com/anatolijlaptev1991-ctrl/lavray-openwrt/actions/workflows/ci.yml/badge.svg)](https://github.com/anatolijlaptev1991-ctrl/lavray-openwrt/actions/workflows/ci.yml)
+![OpenWrt](https://img.shields.io/badge/OpenWrt-24.10%20%7C%2025.12-00B5E2?logo=openwrt)
+![Arch](https://img.shields.io/badge/arch-x86__64%20%7C%20aarch64__generic-lightgrey)
 
-## Подключение общего репозитория
+**LAVRay** — кроссплатформенный клиент прокси с раздельной маршрутизацией
+(наследник NekoBox/NekoRay). Это **платформенный репозиторий для OpenWrt**:
+демон `lavrayd` под procd, веб-панель, LuCI-приложение, пакеты и opkg-feed.
 
-```bash
-git submodule add https://github.com/anatolijlaptev1991-ctrl/lavray.git lavray
-git submodule update --init --recursive
+> Роутер работает как **шлюз**: заворачивает трафик подключённых устройств в
+> туннель через nftables TProxy, с политиками per-MAC. Общая кодовая база —
+> **[lavray](https://github.com/anatolijlaptev1991-ctrl/lavray)**.
+
+---
+
+## Состав пакетов
+
+| Пакет | Что это |
+|---|---|
+| `lavrayd` | Go-ядро + демон (procd, `respawn 3600 5 0`), UCI `/etc/config/lavray` |
+| `lavray-webui` | Единый React UI в режиме веб-панели: вход по паролю, HTTPS |
+| `luci-app-lavray` | LuCI-приложение: статус, пресеты, политики устройств, логи |
+| `lavray-feed` | opkg/apk фид с подписью (usign/apk) и watchdog-откатом |
+
+---
+
+## Установка
+
+### 1. Фид (рекомендуется)
+
+```sh
+# 24.10 (opkg)
+wget -O /etc/opkg/keys/<keyid> https://github.com/anatolijlaptev1991-ctrl/lavray-openwrt/raw/main/feed/keys/lavray.pub
+echo "src/gz lavray https://github.com/anatolijlaptev1991-ctrl/lavray-openwrt/raw/main/feed/ipk" >> /etc/opkg/customfeeds.conf
+opkg update && opkg install luci-app-lavray
+
+# 25.12+ (apk)
+wget -O /etc/apk/keys/lavray.pub https://github.com/anatolijlaptev1991-ctrl/lavray-openwrt/raw/main/feed/keys/lavray.pub
+echo "https://github.com/anatolijlaptev1991-ctrl/lavray-openwrt/raw/main/feed/apk/packages.adb" >> /etc/apk/repositories
+apk update && apk add luci-app-lavray
 ```
 
-Обновление сабмодуля — отдельный PR: новый пин = новый коммит `lavray` (никогда не ветка).
+### 2. Вручную (.ipk)
 
-## Зона ответственности этого репозитория
+```sh
+opkg install lavrayd_<ver>_<arch>.ipk lavray-webui_<ver>_all.ipk luci-app-lavray_<ver>_all.ipk
+/etc/init.d/lavray enable && /etc/init.d/lavray start
+```
 
-- **Служба procd:** демон `lavray-core` (запуск/стоп/перезапуск, respawn-политика,
-  UCI-конфиг `/etc/config/lavray`), включение на boot.
-- **Пакеты .ipk:** целевые архитектуры **x86_64** и **aarch64_generic**; зависимость от
-  geodata-пакета; размер и зависимости контролируются в CI.
-- **Веб-панель:** тот же React UI из `lavray/ui/` в режиме веб-панели — рендерится браузером,
-  раздаётся демон-с/static на роутере (без Tauri-оболочки). Отличия от десктопа: нет
-  клиентских процессных правил (silently опускаются с предупреждением), `geoip:private`
-  обязателен (не заворачивать LAN).
-- **luci-app-lavray:** заготовка в [`luci/`](luci/) — минимальная интеграция в LuCI
-  (статус, старт/стоп, ссылка на полную веб-панель).
-- **opkg-feed:** подписанный фид на GitHub Pages — структура в [`feed/`](feed/); пользователи
-  ставят/обновляют LAVRay штатным `opkg` (см. `lavray/docs/UPDATE-SYSTEM.md`).
-- **Сборка:** в контейнере **OpenWrt SDK** (воспроизводимо, без локальных тулчейнов).
+Архитектуры: `x86_64`, `aarch64_generic` (минимум 256 МБ RAM / 64 МБ overlay).
 
-## Статус
+---
 
-Этап 2 (дизайн, аудит) завершён в общем репозитории; платформенная реализация — Этап 3.
-Здесь пока каркас: CI-заготовка, шаблоны issues, заготовки `feed/` и `luci/`.
+## Настройка
 
-## Ссылки
+UCI: `/etc/config/lavray`
 
-- Общий репозиторий: https://github.com/anatolijlaptev1991-ctrl/lavray
-- Документация: `lavray/docs/` (REQUIREMENTS — разделы 15/18, PRESET-LAV-RU — OpenWrt-отличия,
-  UPDATE-SYSTEM).
-- Сестринские платформы: [lavray-windows](https://github.com/anatolijlaptev1991-ctrl/lavray-windows) ·
-  [lavray-linux](https://github.com/anatolijlaptev1991-ctrl/lavray-linux) ·
-  [lavray-macos](https://github.com/anatolijlaptev1991-ctrl/lavray-macos)
+```
+config lavray 'main'
+    option enabled '1'
+    option mode 'tproxy'          # tproxy | tun | off
+    option web_bind '0.0.0.0:8443'
+    option web_allow_remote '1'   # панель доступна из LAN (пароль обязателен)
+    option tproxy_port '7893'
+    option ipv6 '0'               # отдельная ip6-цепочка, по умолчанию выкл
+    option preset 'lav-ru'
+    option watchdog_min '5'       # нет связи N минут → снять правила
+```
+
+Веб-панель: `https://<router>:8443` — экран входа, затем тот же UI, что в
+десктоп-приложении (5 разделов). LuCI: «Сервисы → LAVRay».
+
+### Политики устройств (per-MAC)
+
+| Политика | Поведение |
+|---|---|
+| `proxy` | всё устройство через туннель |
+| `direct` | напрямую (гостевая сеть по умолчанию) |
+| `preset` | по правилам выбранного пресета |
+
+---
+
+## Архитектура на роутере
+
+```
+LAN-клиенты → fw4 (include lavray.nft, table inet lavray)
+                ├─ TProxy tcp+udp → lavray-core (tproxy-инбаунд)
+                ├─ DNS :53 → hijack-dns → dns-remote/direct
+                └─ исключения: приватные, DHCP, трафик самого lavrayd (skuid)
+lavrayd (procd) ── web-панель (Cookie+CSRF) ── LuCI (ubus)
+watchdog: нет связи N мин → снять правила → интернет напрямую; восстановление → вернуть
+```
+
+Правила генерируются детерминированно (`internal/gateway/nft.go`) и снимаются
+стражем восстановления при старте (FR-UI-270) — осиротевших правил не бывает.
+
+---
+
+## Сборка
+
+```bash
+# SDK-контейнер (пример x86_64)
+docker run --rm -v "$PWD:/work" -w /work \
+  ghcr.io/openwrt/sdk:x86_64-24.10 \
+  sh -c './build.sh'
+```
+
+Артефакты: `lavrayd_*.ipk`, `lavray-webui_*.ipk`, `luci-app-lavray_*.ipk`,
+индекс фида `Packages(.gz)`. Матрица CI: 2 архитектуры × 2 релиза (24.10 ipk,
+25.12 apk). Smoke: установка в QEMU-образ, старт сервиса, проверка `/healthz`.
+
+## Безопасность
+
+- Подпись фида обязательна; `signed-by`/keys в `/etc/opkg/keys`.
+- Веб-панель: пароль (PBKDF2), cookie HttpOnly/SameSite=Strict, CSRF, backoff.
+- TUN/TProxy — только свои правила; чужой трафик не перехватывается.
+- Откат обновления — watchdog (UPDATE-SYSTEM §6).
+
+Политика: [SECURITY.md](https://github.com/anatolijlaptev1991-ctrl/lavray/blob/main/docs/SECURITY.md)
+· Шлюз: [OPENWRT-GATEWAY.md](https://github.com/anatolijlaptev1991-ctrl/lavray/blob/main/docs/OPENWRT-GATEWAY.md).
 
 ## Лицензия
 
-[GPL-3.0](LICENSE), унаследована от LAVRay/nekoray.
+[GPL-3.0](LICENSE) — производная nekoray и sing-box.
