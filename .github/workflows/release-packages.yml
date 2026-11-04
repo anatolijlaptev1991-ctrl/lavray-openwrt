@@ -151,9 +151,17 @@ jobs:
           make defconfig
           grep -q '^# CONFIG_SIGNED_PACKAGES is not set' .config
 
+      - name: "Диагностика .config"
+        working-directory: ${{ runner.temp }}/sdk
+        run: |
+          grep -E "CONFIG_PACKAGE_(lavrayd|lavray-webui|luci-app-lavray|lua|curl|libcurl|kmod-tun|kmod-nft-tproxy|ca-bundle|luci-base)[=m ]" .config || echo "нет ни одной из ожидаемых опций"
+
       - name: "Сборка пакетов (${{ matrix.label }})"
         working-directory: ${{ runner.temp }}/sdk
         run: |
+          # Сначала зависимости, у которых в SDK бывает порядок сборки:
+          # lua нужен lucihttp (заголовки в staging), kmod-ы — lavrayd.
+          make package/lua/compile package/curl/compile package/kmod-tun/compile package/kmod-nft-tproxy/compile package/ca-bundle/compile V=s || true
           make package/lavrayd/compile package/lavray-webui/compile package/luci-app-lavray/compile V=s
 
       - name: "usign для подписи индекса (если ключ задан)"
