@@ -20,11 +20,14 @@ PKG_LICENSE:=GPL-3.0-only
 
 ifeq ($(ARCH),x86_64)
   LAVRAY_GOARCH:=amd64
-  # Якорь «# amd64» — CI подставляет свежий хэш релиза sed-ом по этому маркеру.
-  PKG_HASH:=145ad42a4f779a32096485b869bcbe2f51dcde62ff9fdee23195fd09a41ecc2d # amd64
+  # Якорь sed для CI — строка ПЕРЕД PKG_HASH: inline-комментарий оставлял бы
+  # пробел в значении, и download.pl не распознавал бы SHA256.
+  # amd64
+  PKG_HASH:=145ad42a4f779a32096485b869bcbe2f51dcde62ff9fdee23195fd09a41ecc2d
 else ifeq ($(ARCH),aarch64)
   LAVRAY_GOARCH:=arm64
-  PKG_HASH:=17fc6bf6f7bd58a36a332a769defa727d132b20db61dc440f7c1dace0a0ff5d8 # arm64
+  # arm64
+  PKG_HASH:=17fc6bf6f7bd58a36a332a769defa727d132b20db61dc440f7c1dace0a0ff5d8
 else
   $(error lavrayd: unsupported ARCH '$(ARCH)' — нужен x86_64 или aarch64)
 endif
