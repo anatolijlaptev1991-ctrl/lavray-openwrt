@@ -1,0 +1,37 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# 90-lavrayd — uci-defaults: выполняется один раз при установке пакета.
+# Создаёт токен ядра (спецификация §3.2: umask 077, 36 байт энтропии),
+# подставляет LAN-адрес роутера в адрес панели и ставит строку стража
+# в cron. Существующие настройки не перетирает.
+
+mkdir -p /etc/lavray/data /var/run/lavray/active
+chmod 700 /etc/lavray
+
+if [ ! -s /etc/lavray/core.token ]; then
+	umask 077
+	head -c 36 /dev/urandom | base64 > /etc/lavray/core.token
+	chmod 600 /etc/lavray/core.token
+fi
+
+# Адрес панели: LAN-IP роутера, не 0.0.0.0. Переменную network.lan.ipaddr
+# подставляем только при первом появлении опции (config из пакета ставит
+# безопасный дефолт 192.168.1.1:9090).
+if [ "$(uci -q get lavray.main.listen)" = "192.168.1.1:9090" ]; then
+	lanip="$(uci -q get network.lan.ipaddr)"
+	[ -n "$lanip" ] && uci set lavray.main.listen="${lanip}:9090"
+fi
+uci commit lavray
+
+# Страж правил после падения ядра (спецификация §3.5): раз в минуту.
+if [ -f /etc/crontabs/root ]; then
+	grep -q '/usr/sbin/lavray-guard' /etc/crontabs/root || \
+		echo '*/1 * * * * /usr/sbin/lavray-guard' >> /etc/crontabs/root
+else
+	echo '*/1 * * * * /usr/sbin/lavray-guard' > /etc/crontabs/root
+	chmod 600 /etc/crontabs/root
+fi
+/etc/init.d/cron restart >/dev/null 2>&1
+
+exit 0

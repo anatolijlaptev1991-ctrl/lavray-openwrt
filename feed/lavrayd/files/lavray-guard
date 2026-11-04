@@ -1,0 +1,20 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# lavray-guard — внешний страж правил (спецификация §3.5). Ядро, убитое
+# kill -9 или убитое OOM, не может снять свои правила nft: LAN остаётся
+# без интернета. Cron вызывает страж каждую минуту (строку ставит
+# uci-defaults), procd вызывает из service_stopped.
+#
+# При следующем старте ядро само снимает осиротевшие правила (ClearOrphans),
+# поэтому рассинхронизации после возврата службы не остаётся.
+
+pidof lavray-core >/dev/null 2>&1 && exit 0
+nft list table inet lavray >/dev/null 2>&1 || exit 0
+# Повторная проверка: ядро могло стартовать между pidof и nft list
+# (окно гонки; ClearOrphans при старте в любом случае разрулит остатки).
+pidof lavray-core >/dev/null 2>&1 && exit 0
+nft delete table inet lavray
+rm -f /var/run/lavray/active/*.nft
+logger -t lavray-guard "ядро не запущено: правила nft сняты"
+exit 0

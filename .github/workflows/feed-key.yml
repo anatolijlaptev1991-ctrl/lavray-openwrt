@@ -1,0 +1,50 @@
+name: feed-key
+
+# Ручная генерация usign-ключа фида (спецификация §4.5). Ключ не хранится
+# в репозитории: артефакт скачивает владелец, .sec кладёт в Environment
+# feed-signing (LAVRAY_FEED_KEY), .pub — в файл feed/key.pub. Артефакт
+# живёт 1 день; после сохранения ключа запуск повторять не нужно.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  genkey:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: "usign: сборка host-инструмента"
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends build-essential cmake git
+          git clone --depth 1 https://git.openwrt.org/project/usign.git
+          cd usign && cmake . >/dev/null && make -j2 >/dev/null
+
+      - name: "Генерация пары ключей"
+        run: |
+          ./usign/usign -G -c "LAVRay OpenWrt feed" -p feed.pub -s feed.sec
+          echo "=== Отпечаток (публичный) ==="
+          ./usign/usign -F -p feed.pub
+          echo "=== feed.pub ==="
+          cat feed.pub
+
+      - name: "Артефакт: пара ключей (забрать и удалить)"
+        uses: actions/upload-artifact@v4
+        with:
+          name: feed-keypair
+          path: |
+            feed.pub
+            feed.sec
+          retention-days: 1
+
+      - name: "Что делать дальше"
+        run: |
+          cat <<'EOF'
+          1. Скачайте артефакт feed-keypair.
+          2. feed.sec -> Environment feed-signing этого репозитория,
+             имя секрета LAVRAY_FEED_KEY; ревьюер Environment — владелец.
+          3. feed.pub -> файл feed/key.pub в ветке main (открытый ключ,
+             коммитится; роутеры ставят его командой opkg-key add).
+          4. Артефакт исчезнет через сутки; хранить .sec в CI нельзя.
+          EOF
