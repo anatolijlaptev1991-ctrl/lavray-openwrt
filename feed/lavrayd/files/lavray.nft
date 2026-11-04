@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-3.0-only
+#
+# Include для fw4 (спецификация §3.3). Таблицу inet lavray ставит и снимает
+# само ядро; этот include возвращает её после `fw4 reload`. Ядро держит
+# активный набор в /var/run/lavray/active/lavray.nft и удаляет файл при
+# выключении, поэтому пустой каталог = пустой include.
+#
+# [проверить]: fw4 24.10/25.12 и маска include без ошибок на пустом каталоге;
+# запасной вариант — hotplug-хук /etc/hotplug.d/firewall/90-lavray.
+
+include "/var/run/lavray/active/*.nft"

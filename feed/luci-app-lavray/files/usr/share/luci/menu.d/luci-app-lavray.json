@@ -1,0 +1,13 @@
+{
+	"admin/services/lavray": {
+		"title": "LAVRay",
+		"order": 65,
+		"action": {
+			"type": "view",
+			"path": "lavray/status"
+		},
+		"depends": {
+			"acl": [ "luci-app-lavray" ]
+		}
+	}
+}
