@@ -7,8 +7,9 @@
 **LAVRay** — кроссплатформенный клиент прокси с раздельной маршрутизацией
 (наследник NekoBox/NekoRay). Это **платформенный репозиторий для OpenWrt**:
 пакеты `lavrayd` (ядро + procd-служба), `lavray-webui` (метапакет) и
-`luci-app-lavray` (страница LuCI), плюс opkg-фид, который собирает CI в
-SDK. Общая кодовая база — **[lavray](https://github.com/anatolijlaptev1991-ctrl/lavray)**;
+`luci-app-lavray` (страница LuCI) в корне репозитория (раскладка фида
+OpenWrt — каталоги пакетов на верхнем уровне), плюс opkg-фид, который
+собирает CI через openwrt/gh-action-sdk. Общая кодовая база — **[lavray](https://github.com/anatolijlaptev1991-ctrl/lavray)**;
 спецификация пакетов — [`docs/OPENWRT-PACKAGING.md`](https://github.com/anatolijlaptev1991-ctrl/lavray/blob/main/docs/OPENWRT-PACKAGING.md)
 в том репозитории.
 
@@ -103,12 +104,13 @@ include возвращает её после `fw4 reload`. Страж — на �
 
 ## Сборка
 
-CI: workflow `release-packages` (тег `v*` или вручную) собирает пакеты в
-OpenWrt SDK для четырёх целей (x86/64, mediatek/filogic, bcm27xx/bcm2711,
-armsr/armv8), строит индекс `make package/index`, подписывает usign-ом
-(если ключ в Environment `feed-signing`) и публикует в gh-pages и релиз.
-Бинарь ядра скачивается из релиза `lavray` — в SDK ничего не компилируется
-кроме метаданных пакетов.
+CI: workflow `release-packages` (тег `v*` или вручную) собирает пакеты
+через `openwrt/gh-action-sdk` в официальных SDK-контейнерах
+`openwrt/sdk:<цель>-24.10.8` для четырёх целей (x86_64, aarch64_cortex-a53,
+aarch64_cortex-a72, aarch64_generic), строит индекс (`INDEX=1`) и подписывает
+usign-ключом `KEY_BUILD` из Environment `feed-signing`, публикует в gh-pages
+и релиз. Бинарь ядра скачивается из релиза `lavray` — из исходников в этом
+репозитории ничего не компилируется.
 
 Локально: `gh workflow run release-packages.yml`. Быстрые проверки без SDK
 — `ci.yml` (sh -n, JSON, JS, структура пакетов, отсутствие секретов).

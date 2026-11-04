@@ -1,28 +1,33 @@
 name: release-packages
 
-# Сборка пакетов OpenWrt в SDK и публикация фида (спецификация
-# OPENWRT-PACKAGING.md §4). Запуск: тег v* или вручную с параметрами.
-# Пакеты не пересобирают ядро — SDK упаковывает готовый бинарь из релиза
-# lavray. Подпись индекса — usign-ключом из Environment feed-signing;
-# без ключа фид выходит без Packages.sig (§4.2), как релизы 0.9.x без meta/.
+# Сборка пакетов OpenWrt и публикация фида (спецификация
+# OPENWRT-PACKAGING.md §4). Запуск: тег v* или вручную.
+#
+# Сборка — openwrt/gh-action-sdk (эталонный путь для пакетов с luci- и
+# kmod-зависимостями): официальный SDK-контейнер, полный разбор зависимостей
+# (lucihttp→lua, kmod-tun, curl), INDEX=1 строит Packages и подписывает
+# usign-ключом KEY_BUILD (Environment feed-signing). Без ключа — фид без
+# Packages.sig, как релизы 0.9.x без meta/ до церомонии ключей.
+#
+# Контейнеры: openwrt/sdk:<цель>-<патч-релиз> (пин 24.10.8; теги —
+# hub.docker.com/repositories/openwrt/sdk). Метка ipk внутри SDK остаётся
+# целевой (x86_64, aarch64_cortex-a53, ...), не именем контейнера.
 
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
     inputs:
-      lavray_version:
-        description: "Версия ядра lavray без v (0.9.1); пусто — тег, если есть, иначе latest release lavray"
+      sdk_version:
+        description: "Патч-релиз SDK OpenWrt (24.10.8); служебное, менять осознанно"
         required: false
-      openwrt_version:
-        description: "Версия OpenWrt (24.10.x); пусто — последняя 24.10.* с downloads.openwrt.org"
-        required: false
+        default: '24.10.8'
 
 permissions:
   contents: read
 
-# Параллельные прогоны на одном теге друг другу мешают (force-push gh-pages,
-# перезапись ассетов), как release-signing в lavray (concurrency без отмены).
+# Параллельные прогоны на одном теге мешают друг другу (force-push gh-pages,
+# перезапись ассетов) — как release-signing в lavray, без отмены.
 concurrency:
   group: release-packages-${{ github.ref }}
   cancel-in-progress: false
@@ -31,167 +36,38 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     env:
-      FEED_KEY: ${{ secrets.LAVRAY_FEED_KEY }}
-      LAVRAY_INPUT: ${{ inputs.lavray_version }}
-      OPENWRT_INPUT: ${{ inputs.openwrt_version }}
+      KEY_BUILD: ${{ secrets.LAVRAY_FEED_KEY }}
+      SDK_VERSION: ${{ inputs.sdk_version || '24.10.8' }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { target: 'x86/64',           label: 'x86_64' }
-          - { target: 'mediatek/filogic', label: 'aarch64_cortex-a53' }
-          - { target: 'bcm27xx/bcm2711',  label: 'aarch64_cortex-a72' }
-          - { target: 'armsr/armv8',      label: 'aarch64_generic' }
+          - { label: 'x86_64' }
+          - { label: 'aarch64_cortex-a53' }
+          - { label: 'aarch64_cortex-a72' }
+          - { label: 'aarch64_generic' }
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: "Версии: lavray и OpenWrt"
-        id: ver
-        run: |
-          lav="${LAVRAY_INPUT}"
-          if [ -z "$lav" ]; then
-            ref="${{ github.ref_name }}"
-            lav="${ref#v}"
-            # Из имени рефа берём версию, если она на него похожа; ветки
-            # («main», «feature/…») — не версия: идём в latest-релиз lavray.
-            case "$lav" in
-              [0-9]*.[0-9]*.[0-9]*|*[a-z-]*[0-9].*) ;;
-              *) lav='' ;;
-            esac
-          fi
-          if [ -z "$lav" ]; then
-            lav="$(gh release list -R anatolijlaptev1991-ctrl/lavray --json tagName,isLatest -q '.[] | select(.isLatest) | .tagName' | sed 's/^v//')"
-          fi
-          echo "lavray=$lav" >> "$GITHUB_OUTPUT"
-
-          ow="${OPENWRT_INPUT}"
-          if [ -z "$ow" ]; then
-            ow="$(curl -fsSL https://downloads.openwrt.org/releases/ \
-              | grep -oE '24\.10\.[0-9]+/' | tr -d '/' | sort -V | tail -n1)"
-          fi
-          if ! curl -fsSLI "https://downloads.openwrt.org/releases/$ow/" > /dev/null; then
-            echo "::error title=Неверная версия OpenWrt::$ow не существует на downloads.openwrt.org"
-            exit 1
-          fi
-          echo "openwrt=$ow" >> "$GITHUB_OUTPUT"
-          echo "lavray: $lav; openwrt: $ow"
+      - name: "SDK-сборка: lavrayd, lavray-webui, luci-app-lavray (${{ matrix.label }})"
+        uses: openwrt/gh-action-sdk@v6
         env:
-          GH_TOKEN: ${{ github.token }}
+          ARCH: ${{ matrix.label }}-${{ env.SDK_VERSION }}
+          FEEDNAME: lavray
+          PACKAGES: lavrayd lavray-webui luci-app-lavray
+          INDEX: 1
+          NO_SHFMT_CHECK: 1
+          V: ''
 
-      - name: "Зависимости раннера (SDK)"
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential gawk gettext libncurses-dev libssl-dev \
-            unzip file python3-dev zlib1g-dev rsync
-
-      - name: "Скачивание и распаковка SDK (${{ matrix.target }}, ${{ steps.ver.outputs.openwrt }})"
-        working-directory: ${{ runner.temp }}
-        run: |
-          ver="${{ steps.ver.outputs.openwrt }}"
-          target="${{ matrix.target }}"
-          base="https://downloads.openwrt.org/releases/$ver/targets/$target"
-          # С 24.10 SDK публикуется как .tar.zst (Linux-x86_64, gcc-musl в имени).
-          sdk_file="$(curl -fsSL "$base/" | grep -oE 'openwrt-sdk-[^"]+\.tar\.zst' | head -n1)"
-          test -n "$sdk_file" || { echo "::error title=Нет SDK::в $base нет openwrt-sdk-*.tar.zst"; exit 1; }
-          echo "SDK: $sdk_file"
-          curl -fsSL "$base/$sdk_file" -o sdk.tar.zst
-          mkdir sdk && tar --zstd -xf sdk.tar.zst -C sdk --strip-components=1
-
-      - name: "Хэши ядра из релиза lavray v${{ steps.ver.outputs.lavray }}"
-        id: hash
-        run: |
-          ver="${{ steps.ver.outputs.lavray }}"
-          curl -fsSL "https://github.com/anatolijlaptev1991-ctrl/lavray/releases/download/v$ver/SHA256SUMS-linux.txt" \
-            -o sums.txt
-          amd=$(awk '$2=="lavray-core-linux-amd64"{print $1}' sums.txt)
-          arm=$(awk '$2=="lavray-core-linux-arm64"{print $1}' sums.txt)
-          test -n "$amd" -a -n "$arm" || { echo "::error title=Нет сумм::в SHA256SUMS-linux.txt не нашли оба ядра"; exit 1; }
-          echo "amd=$amd" >> "$GITHUB_OUTPUT"
-          echo "arm=$arm" >> "$GITHUB_OUTPUT"
-
-      - name: "Feeds: luci-base и curl для зависимостей"
-        working-directory: ${{ runner.temp }}/sdk
-        run: |
-          # git.openwrt.org местами деградирует — федсы на зеркала GitHub
-          # (как делает gh-action-sdk).
-          cat > feeds.conf.default <<'EOF'
-          src-git packages https://github.com/openwrt/packages.git;openwrt-24.10
-          src-git luci https://github.com/openwrt/luci.git;openwrt-24.10
-          EOF
-          ./scripts/feeds update -a
-          ./scripts/feeds install -f -a
-          # Явно: defconfig выбрасывает наши пакеты, если зависимостей нет
-          ./scripts/feeds install -f lua liblua5.1 libubox libuci ucode luci-base lucihttp rpcd curl ca-bundle
-
-      - name: "Пакеты в дерево SDK и версии/хэши релиза"
-        working-directory: ${{ runner.temp }}/sdk
-        run: |
-          ver="${{ steps.ver.outputs.lavray }}"
-          cp -r "$GITHUB_WORKSPACE/feed"/* package/
-          for mk in package/lavrayd/Makefile package/lavray-webui/Makefile package/luci-app-lavray/Makefile; do
-            sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=$ver/" "$mk"
-          done
-          sed -i "s/^  PKG_HASH:=.*# amd64/  PKG_HASH:=${{ steps.hash.outputs.amd }} # amd64/" package/lavrayd/Makefile
-          sed -i "s/^  PKG_HASH:=.*# arm64/  PKG_HASH:=${{ steps.hash.outputs.arm }} # arm64/" package/lavrayd/Makefile
-
-      - name: "defconfig: цели включены, автоподпись SDK выключена"
-        working-directory: ${{ runner.temp }}/sdk
-        run: |
-          make defconfig
-          cat >> .config <<EOF
-          CONFIG_PACKAGE_lavrayd=m
-          CONFIG_PACKAGE_lavray-webui=m
-          CONFIG_PACKAGE_luci-app-lavray=m
-          EOF
-          make defconfig
-          # make package/index при SIGNED_PACKAGES=y требует key-build и
-          # подписывает bin-индекс одноразовым ключом; фид подписываем сами
-          # ключом feed-signing, поэтому SDK-подпись выключаем.
-          sed -i 's/^CONFIG_SIGNED_PACKAGES=y/# CONFIG_SIGNED_PACKAGES is not set/' .config
-          make defconfig
-          grep -q '^# CONFIG_SIGNED_PACKAGES is not set' .config
-
-      - name: "Диагностика .config"
-        working-directory: ${{ runner.temp }}/sdk
-        run: |
-          grep -E "CONFIG_PACKAGE_(lavrayd|lavray-webui|luci-app-lavray|lua|curl|libcurl|kmod-tun|kmod-nft-tproxy|ca-bundle|luci-base)[=]" .config || echo "нет ни одной из ожидаемых опций"
-
-      - name: "Сборка пакетов (${{ matrix.label }})"
-        working-directory: ${{ runner.temp }}/sdk
-        run: |
-          # Сначала зависимости, у которых в SDK бывает порядок сборки:
-          # lua нужен lucihttp (заголовки в staging), kmod-ы — lavrayd.
-          make package/feeds/packages/lua/compile package/feeds/packages/curl/compile package/ca-bundle/compile V=s
-          make package/kmod-tun/compile package/kmod-nft-tproxy/compile V=s || true
-          make package/lavrayd/compile package/lavray-webui/compile package/luci-app-lavray/compile V=s
-
-      - name: "usign для подписи индекса (если ключ задан)"
-        if: env.FEED_KEY != ''
-        working-directory: ${{ runner.temp }}
-        run: |
-          git clone --depth 1 https://git.openwrt.org/project/usign.git
-          cd usign && cmake . >/dev/null && make >/dev/null
-          echo "$RUNNER_TEMP/usign" >> "$GITHUB_PATH"
-
-      - name: "Фид: сборка индекса и подпись"
-        working-directory: ${{ runner.temp }}/sdk
-        run: |
-          key_file=''
-          if [ -n "$FEED_KEY" ]; then
-            key_file="$RUNNER_TEMP/feed.sec"
-            printf '%s' "$FEED_KEY" > "$key_file"
-          fi
-          sh "$GITHUB_WORKSPACE/scripts/collect-feed.sh" \
-            "${{ steps.ver.outputs.openwrt }}" "${{ matrix.label }}" \
-            "$GITHUB_WORKSPACE/feed-out" "$key_file"
-
-      - name: "Артефакт: feed-${{ steps.ver.outputs.openwrt }}-${{ matrix.label }}"
+      - name: "Артефакт: feed-${{ matrix.label }}"
         uses: actions/upload-artifact@v4
         with:
-          name: feed-${{ steps.ver.outputs.openwrt }}-${{ matrix.label }}
-          path: feed-out/
+          name: feed-${{ matrix.label }}
+          path: |
+            bin/packages/*/lavray/*
+            bin/packages/*/packages/*
+            logs/*
 
   publish:
     needs: build
@@ -210,17 +86,21 @@ jobs:
       - name: "Сборка дерева фида и tarball-ов по целям"
         run: |
           mkdir -p gh-pages feed-tars
-          # Дерево артефактов: artifacts/feed-<ver>-<label>/<ver>/<label>/packages/...
-          # В gh-pages переносим содержимое, сохраняя <ver>/<label>/packages.
+          # Дерево артефактов: artifacts/feed-<label>/<arch>/<feedname>/...
+          # В gh-pages: <label>/packages/... (arch внутри SDK равен метке).
           for art in artifacts/feed-*; do
             [ -d "$art" ] || continue
             name="$(basename "$art")"
-            (cd "$art" && tar -czf "$OLDPWD/feed-tars/$name.tar.gz" .)
-            cp -r "$art/." "gh-pages/${name#feed-}/"
+            pkgdir="$(find "$art" -type d -name lavray | head -n1)"
+            [ -n "$pkgdir" ] || pkgdir="$(find "$art" -type d -name packages | head -n1)"
+            test -n "$pkgdir" || { echo "::error title=Нет пакетов::в $art нет каталога пакетов"; exit 1; }
+            (cd "$pkgdir" && tar -czf "$OLDPWD/feed-tars/$name.tar.gz" .)
+            mkdir -p "gh-pages/$name/packages"
+            cp "$pkgdir"/* "gh-pages/$name/packages/"
           done
           # Открытый ключ фида для роутеров (opkg-key add)
           [ -f feed/key.pub ] && cp feed/key.pub gh-pages/key.pub
-          find gh-pages -type f | sort
+          find gh-pages -type f | sort | head -30
           ls -la feed-tars/
 
       - name: "gh-pages: публикация фида"

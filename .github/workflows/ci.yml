@@ -52,9 +52,9 @@ jobs:
         run: |
           fail=0
           for f in $(git ls-files '*.sh' \
-                     'feed/lavrayd/files/lavrayd.init' \
-                     'feed/lavrayd/files/lavrayd-uci-defaults' \
-                     'feed/lavrayd/files/lavray-guard'); do
+                     'lavrayd/files/lavrayd.init' \
+                     'lavrayd/files/lavrayd-uci-defaults' \
+                     'lavrayd/files/lavray-guard'); do
             echo "sh -n $f"
             sh -n "$f" || fail=1
           done
@@ -69,11 +69,11 @@ jobs:
 
       - name: "JS: синтаксис представления LuCI"
         run: |
-          node --check feed/luci-app-lavray/files/www/luci-static/resources/view/lavray/status.js
+          node --check luci-app-lavray/files/www/luci-static/resources/view/lavray/status.js
 
       - name: "ucode: rpcd-плагин — структурные проверки"
         run: |
-          f=feed/luci-app-lavray/files/usr/share/rpcd/ucode/lavray
+          f=luci-app-lavray/files/usr/share/rpcd/ucode/lavray
           grep -q "return { lavray:" "$f"
           for m in get_status get_web get_gateway get_setup_code get_policies \
                    set_gateway set_device_policy; do
@@ -91,18 +91,18 @@ jobs:
       - name: "Структура пакетов (спецификация §3)"
         run: |
           set -eu
-          test -f feed/lavrayd/Makefile
-          test -f feed/lavrayd/files/lavrayd.init
-          test -f feed/lavrayd/files/lavray.config
-          test -f feed/lavrayd/files/lavrayd-uci-defaults
-          test -f feed/lavrayd/files/lavray.nft
-          test -f feed/lavrayd/files/lavray-guard
-          test -f feed/lavray-webui/Makefile
-          test -f feed/luci-app-lavray/Makefile
-          test -f feed/luci-app-lavray/files/usr/share/luci/menu.d/luci-app-lavray.json
-          test -f feed/luci-app-lavray/files/usr/share/rpcd/acl.d/luci-app-lavray.json
-          test -f feed/luci-app-lavray/files/usr/share/rpcd/ucode/lavray
-          test -f feed/luci-app-lavray/files/www/luci-static/resources/view/lavray/status.js
+          test -f lavrayd/Makefile
+          test -f lavrayd/files/lavrayd.init
+          test -f lavrayd/files/lavray.config
+          test -f lavrayd/files/lavrayd-uci-defaults
+          test -f lavrayd/files/lavray.nft
+          test -f lavrayd/files/lavray-guard
+          test -f lavray-webui/Makefile
+          test -f luci-app-lavray/Makefile
+          test -f luci-app-lavray/files/usr/share/luci/menu.d/luci-app-lavray.json
+          test -f luci-app-lavray/files/usr/share/rpcd/acl.d/luci-app-lavray.json
+          test -f luci-app-lavray/files/usr/share/rpcd/ucode/lavray
+          test -f luci-app-lavray/files/www/luci-static/resources/view/lavray/status.js
           [ -f feed/key.pub ] || echo "note: feed/key.pub появится после workflow feed-key"
           echo "структура OK"
 
@@ -120,7 +120,7 @@ jobs:
       - name: "SPDX-заголовки"
         run: |
           fail=0
-          for f in $(git ls-files 'feed/*' 'scripts/*'); do
+          for f in $(git ls-files 'lavrayd/*' 'lavray-webui/*' 'luci-app-lavray/*'); do
             case "$f" in
               *.json|*.js|*.pub|*.keep) continue ;;
             esac
