@@ -53,8 +53,11 @@ jobs:
           if [ -z "$lav" ]; then
             ref="${{ github.ref_name }}"
             lav="${ref#v}"
+            # Из имени рефа берём версию, если она на него похожа; ветки
+            # («main», «feature/…») — не версия: идём в latest-релиз lavray.
             case "$lav" in
-              *-owrt*) lav='' ;;
+              [0-9]*.[0-9]*.[0-9]*|*[a-z-]*[0-9].*) ;;
+              *) lav='' ;;
             esac
           fi
           if [ -z "$lav" ]; then
