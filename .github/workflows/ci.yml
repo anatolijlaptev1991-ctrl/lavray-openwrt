@@ -1,8 +1,5 @@
-# CI LAVRay (OpenWrt) — заготовка Этапа 2.
-#
-# Stage 3: сборка приложения — здесь появятся jobs сборки Go-ядра, пакетов .ipk
-# в контейнере OpenWrt SDK и публикации релиза. Пока включены только линт-проверки
-# структуры репозитория.
+# CI LAVRay (OpenWrt): быстрые проверки репозитория. Сборка ipk в SDK —
+# отдельный workflow release-packages.yml (тяжёлая, по тегу или вручную).
 
 name: CI
 
@@ -11,19 +8,15 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Линт структуры и Markdown
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      # Сабмодуль lavray ещё не добавлен (общий репозиторий подключается Этапом 3):
-      # git submodule add https://github.com/anatolijlaptev1991-ctrl/lavray.git lavray
-      # После добавления раскомментировать:
-      # - uses: actions/checkout@v4
-      #   with:
-      #     submodules: recursive
 
       - name: Проверка структуры репозитория
         run: |
@@ -49,10 +42,89 @@ jobs:
           done < <(find . -name '*.md' -not -path './.git/*' -print0)
           exit $fail
 
-  build:
-    name: Сборка (Stage 3)
-    runs-on: ubuntu-latest
+  packages:
+    name: "Пакеты: синтаксис, JSON, ucode, структура"
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Placeholder
-        run: 'echo "Stage 3: сборка приложения — job будет добавлен на этапе реализации."'
+
+      - name: "Shell: sh -n по всем скриптам и файлам службы"
+        run: |
+          fail=0
+          for f in $(git ls-files '*.sh' \
+                     'feed/lavrayd/files/lavrayd.init' \
+                     'feed/lavrayd/files/lavrayd-uci-defaults' \
+                     'feed/lavrayd/files/lavray-guard'); do
+            echo "sh -n $f"
+            sh -n "$f" || fail=1
+          done
+          exit $fail
+
+      - name: "JSON: menu.d и acl.d"
+        run: |
+          for f in $(git ls-files '*.json'); do
+            echo "json $f"
+            python3 -m json.tool "$f" > /dev/null
+          done
+
+      - name: "JS: синтаксис представления LuCI"
+        run: |
+          node --check feed/luci-app-lavray/files/www/luci-static/resources/view/lavray/status.js
+
+      - name: "ucode: rpcd-плагин — структурные проверки"
+        run: |
+          f=feed/luci-app-lavray/files/usr/share/rpcd/ucode/lavray
+          grep -q "return { lavray:" "$f"
+          for m in get_status get_web get_gateway get_setup_code get_policies \
+                   set_gateway set_device_policy; do
+            grep -q "^[[:space:]]*$m(" "$f" || { echo "нет метода $m" >&2; exit 1; }
+          done
+          # Токен ядра не должен попадать в возвращаемые значения методов
+          # (return-строки; комментарии/ошибки вида core_token_invalid — нет).
+          grep -q "core.token" "$f"
+          if grep -nE '^\s*return [^;]*token' "$f"; then
+            echo "FAIL: токен ядра утекает в ответ rpcd" >&2
+            exit 1
+          fi
+          echo "ucode структура OK"
+
+      - name: "Структура пакетов (спецификация §3)"
+        run: |
+          set -eu
+          test -f feed/lavrayd/Makefile
+          test -f feed/lavrayd/files/lavrayd.init
+          test -f feed/lavrayd/files/lavray.config
+          test -f feed/lavrayd/files/lavrayd-uci-defaults
+          test -f feed/lavrayd/files/lavray.nft
+          test -f feed/lavrayd/files/lavray-guard
+          test -f feed/lavray-webui/Makefile
+          test -f feed/luci-app-lavray/Makefile
+          test -f feed/luci-app-lavray/files/usr/share/luci/menu.d/luci-app-lavray.json
+          test -f feed/luci-app-lavray/files/usr/share/rpcd/acl.d/luci-app-lavray.json
+          test -f feed/luci-app-lavray/files/usr/share/rpcd/ucode/lavray
+          test -f feed/luci-app-lavray/files/www/luci-static/resources/view/lavray/status.js
+          [ -f feed/key.pub ] || echo "note: feed/key.pub появится после workflow feed-key"
+          echo "структура OK"
+
+      - name: "Секреты в репозитории отсутствуют"
+        run: |
+          # usign-ключ фида, приватные ключи обновлений, токены.
+          # Паттерн исключает .github — иначе grep сработает на сам себя
+          if git grep -n -E 'untrusted comment: .*secret|untrusted comment: .*private key|BEGIN (RSA|EC|OPENSSH) PRIVATE KEY' \
+               -- ':!docs' -- ':!.github'; then
+            echo "FAIL: похоже на приватный ключ" >&2
+            exit 1
+          fi
+          echo "ok"
+
+      - name: "SPDX-заголовки"
+        run: |
+          fail=0
+          for f in $(git ls-files 'feed/*' 'scripts/*'); do
+            case "$f" in
+              *.json|*.js|*.pub|*.keep) continue ;;
+            esac
+            grep -q "SPDX-License-Identifier: GPL-3.0-only" "$f" || {
+              echo "FAIL: нет SPDX в $f" >&2; fail=1; }
+          done
+          exit $fail

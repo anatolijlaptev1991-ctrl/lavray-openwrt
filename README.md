@@ -1,124 +1,136 @@
 # LAVRay for OpenWrt
 
 [![CI](https://github.com/anatolijlaptev1991-ctrl/lavray-openwrt/actions/workflows/ci.yml/badge.svg)](https://github.com/anatolijlaptev1991-ctrl/lavray-openwrt/actions/workflows/ci.yml)
-![OpenWrt](https://img.shields.io/badge/OpenWrt-24.10%20%7C%2025.12-00B5E2?logo=openwrt)
-![Arch](https://img.shields.io/badge/arch-x86__64%20%7C%20aarch64__generic-lightgrey)
+![OpenWrt](https://img.shields.io/badge/OpenWrt-24.10-00B5E2?logo=openwrt)
+![Arch](https://img.shields.io/badge/arch-x86__64%20%7C%20aarch64-lightgrey)
 
 **LAVRay** — кроссплатформенный клиент прокси с раздельной маршрутизацией
 (наследник NekoBox/NekoRay). Это **платформенный репозиторий для OpenWrt**:
-демон `lavrayd` под procd, веб-панель, LuCI-приложение, пакеты и opkg-feed.
+пакеты `lavrayd` (ядро + procd-служба), `lavray-webui` (метапакет) и
+`luci-app-lavray` (страница LuCI), плюс opkg-фид, который собирает CI в
+SDK. Общая кодовая база — **[lavray](https://github.com/anatolijlaptev1991-ctrl/lavray)**;
+спецификация пакетов — [`docs/OPENWRT-PACKAGING.md`](https://github.com/anatolijlaptev1991-ctrl/lavray/blob/main/docs/OPENWRT-PACKAGING.md)
+в том репозитории.
 
-> Роутер работает как **шлюз**: заворачивает трафик подключённых устройств в
-> туннель через nftables TProxy, с политиками per-MAC. Общая кодовая база —
-> **[lavray](https://github.com/anatolijlaptev1991-ctrl/lavray)**.
+> Роутер работает как **шлюз**: заворачивает трафик подключённых устройств
+> в туннель через nftables TProxy, с политиками per-MAC и стражем правил.
 
 ---
 
-## Состав пакетов
+## Состав
 
 | Пакет | Что это |
 |---|---|
-| `lavrayd` | Go-ядро + демон (procd, `respawn 3600 5 0`), UCI `/etc/config/lavray` |
-| `lavray-webui` | Единый React UI в режиме веб-панели: вход по паролю, HTTPS |
-| `luci-app-lavray` | LuCI-приложение: статус, пресеты, политики устройств, логи |
-| `lavray-feed` | opkg/apk фид с подписью (usign/apk) и watchdog-откатом |
+| `lavrayd` | Готовый бинарь `lavray-core` из релиза lavray (тег `with_webui`), procd-служба `/etc/init.d/lavrayd`, UCI `/etc/config/lavray`, include fw4 `/usr/share/nftables.d/ruleset-post/lavray.nft`, страж `/usr/sbin/lavray-guard` + cron, uci-defaults (токен ядра, LAN-адрес панели, cron) |
+| `lavray-webui` | Метапакет: тянет `lavrayd`, при установке подставляет LAN-адрес в адрес панели, включает TLS, разрешает автозапуск. Панель встроена в бинарь — файлов в `/www` нет |
+| `luci-app-lavray` | Страница «Сервисы → LAVRay»: статус, отпечаток сертификата, код первичной настройки, переключатель шлюза; бэкенд — rpcd-плагин ucode со своим ACL |
+
+Поддерживаются OpenWrt 24.10 (opkg, `.ipk`), архитектуры `x86_64` и
+`aarch64` (cortex-a53, cortex-a72, generic — один бинарь arm64 под тремя
+метками). Минимум на устройстве: 256 МБ ОЗУ, 64 МБ overlay. На mipsel_24kc
+(MT7621) не работает — `preinst` откажется с объяснением. Фид для 25.12+
+(apk) появится отдельной итерацией (§4.3 спецификации, `[проверить]`).
 
 ---
 
 ## Установка
 
-### 1. Фид (рекомендуется)
+### 1. Фид (после первого релиза пакетов)
+
+CI публикует фид на GitHub Pages этого репозитория (репозиторий должен
+быть публичным — Pages недоступны приватным). Подробная инструкция с
+ключом фида — [`docs/INSTALL.md`](docs/INSTALL.md):
 
 ```sh
-# 24.10 (opkg)
-wget -O /etc/opkg/keys/<keyid> https://github.com/anatolijlaptev1991-ctrl/lavray-openwrt/raw/main/feed/keys/lavray.pub
-echo "src/gz lavray https://github.com/anatolijlaptev1991-ctrl/lavray-openwrt/raw/main/feed/ipk" >> /etc/opkg/customfeeds.conf
+src/gz lavray https://anatolijlaptev1991-ctrl.github.io/lavray-openwrt/<версия OpenWrt>/<метка>/packages
 opkg update && opkg install luci-app-lavray
-
-# 25.12+ (apk)
-wget -O /etc/apk/keys/lavray.pub https://github.com/anatolijlaptev1991-ctrl/lavray-openwrt/raw/main/feed/keys/lavray.pub
-echo "https://github.com/anatolijlaptev1991-ctrl/lavray-openwrt/raw/main/feed/apk/packages.adb" >> /etc/apk/repositories
-apk update && apk add luci-app-lavray
 ```
 
-### 2. Вручную (.ipk)
+Индекс подписан usign: открытый ключ — `feed/key.pub` (генерируется
+workflow `feed-key` вручную, секрет хранится в Environment `feed-signing`).
+
+### 2. Вручную (.ipk из релиза)
 
 ```sh
 opkg install lavrayd_<ver>_<arch>.ipk lavray-webui_<ver>_all.ipk luci-app-lavray_<ver>_all.ipk
-/etc/init.d/lavray enable && /etc/init.d/lavray start
 ```
-
-Архитектуры: `x86_64`, `aarch64_generic` (минимум 256 МБ RAM / 64 МБ overlay).
 
 ---
 
 ## Настройка
 
-UCI: `/etc/config/lavray`
+UCI `/etc/config/lavray` (спецификация §3.2):
 
 ```
 config lavray 'main'
-    option enabled '1'
-    option mode 'tproxy'          # tproxy | tun | off
-    option web_bind '0.0.0.0:8443'
-    option web_allow_remote '1'   # панель доступна из LAN (пароль обязателен)
-    option tproxy_port '7893'
-    option ipv6 '0'               # отдельная ip6-цепочка, по умолчанию выкл
-    option preset 'lav-ru'
-    option watchdog_min '5'       # нет связи N минут → снять правила
+	option enabled '0'
+	option listen '192.168.1.1:9090'   # --web-bind; uci-defaults ставит network.lan.ipaddr
+	option tls '1'                     # --web-tls
+	option tproxy_port '7893'
+	option ipv6 '0'
+	option dns_hijack '0'
+	option watchdog_min '5'
+	option fwmark '1'
+	option lan 'br-lan'
+	option gomemlimit '96MiB'
+	option gogc '50'
 ```
 
-Веб-панель: `https://<router>:8443` — экран входа, затем тот же UI, что в
-десктоп-приложении (5 разделов). LuCI: «Сервисы → LAVRay».
-
-### Политики устройств (per-MAC)
-
-| Политика | Поведение |
-|---|---|
-| `proxy` | всё устройство через туннель |
-| `direct` | напрямую (гостевая сеть по умолчанию) |
-| `preset` | по правилам выбранного пресета |
+Панель: `https://<LAN-IP роутера>:9090/` — тот же UI, что в приложении.
+Первый администратор создаётся с **кодом настройки**: пока админа нет,
+ядро пишет его в `/etc/lavray/data/web-setup-code` (0600); код читают в
+LuCI или по SSH. Политики per-MAC — в панели; LuCI показывает статус,
+отпечаток сертификата (проверка до первого входа) и общий переключатель
+шлюза.
 
 ---
 
 ## Архитектура на роутере
 
 ```
-LAN-клиенты → fw4 (include lavray.nft, table inet lavray)
+LAN-клиенты → fw4 (include lavray.nft → table inet lavray)
                 ├─ TProxy tcp+udp → lavray-core (tproxy-инбаунд)
-                ├─ DNS :53 → hijack-dns → dns-remote/direct
-                └─ исключения: приватные, DHCP, трафик самого lavrayd (skuid)
-lavrayd (procd) ── web-панель (Cookie+CSRF) ── LuCI (ubus)
-watchdog: нет связи N мин → снять правила → интернет напрямую; восстановление → вернуть
+                ├─ DNS :53 → hijack (по настройке) → dns-remote/direct
+                └─ исключения: приватные, DHCP, трафик самого ядра (skuid lavray)
+lavrayd (procd, --platform openwrt) ── web-панель (TLS, код первого входа) ── LuCI (rpcd ucode)
+страж lavray-guard (cron 1 мин + service_stopped): нет ядра → снять правила → интернет напрямую
 ```
 
-Правила генерируются детерминированно (`internal/gateway/nft.go`) и снимаются
-стражем восстановления при старте (FR-UI-270) — осиротевших правил не бывает.
+Таблицу `inet lavray` ставит и снимает ядро (при Ready и при остановке);
+include возвращает её после `fw4 reload`. Страж — на случай `kill -9`/OOM.
 
 ---
 
 ## Сборка
 
-```bash
-# SDK-контейнер (пример x86_64)
-docker run --rm -v "$PWD:/work" -w /work \
-  ghcr.io/openwrt/sdk:x86_64-24.10 \
-  sh -c './build.sh'
-```
+CI: workflow `release-packages` (тег `v*` или вручную) собирает пакеты в
+OpenWrt SDK для четырёх целей (x86/64, mediatek/filogic, bcm27xx/bcm2711,
+armsr/armv8), строит индекс `make package/index`, подписывает usign-ом
+(если ключ в Environment `feed-signing`) и публикует в gh-pages и релиз.
+Бинарь ядра скачивается из релиза `lavray` — в SDK ничего не компилируется
+кроме метаданных пакетов.
 
-Артефакты: `lavrayd_*.ipk`, `lavray-webui_*.ipk`, `luci-app-lavray_*.ipk`,
-индекс фида `Packages(.gz)`. Матрица CI: 2 архитектуры × 2 релиза (24.10 ipk,
-25.12 apk). Smoke: установка в QEMU-образ, старт сервиса, проверка `/healthz`.
+Локально: `gh workflow run release-packages.yml`. Быстрые проверки без SDK
+— `ci.yml` (sh -n, JSON, JS, структура пакетов, отсутствие секретов).
+
+---
 
 ## Безопасность
 
-- Подпись фида обязательна; `signed-by`/keys в `/etc/opkg/keys`.
-- Веб-панель: пароль (PBKDF2), cookie HttpOnly/SameSite=Strict, CSRF, backoff.
-- TUN/TProxy — только свои правила; чужой трафик не перехватывается.
-- Откат обновления — watchdog (UPDATE-SYSTEM §6).
+- Панель слушает **один LAN-адрес** (не `0.0.0.0`), TLS включён метапакетом;
+  отпечаток сертификата виден в LuCI до первого входа.
+- Код первичной настройки защищает создание первого администратора.
+- Токен ядра (`/etc/lavray/core.token`, 0600) даёт полный доступ к API —
+  файл читает только root (rpcd); в ответы rpcd-плагина токен не попадает
+  (проверка в CI).
+- ACL LuCI: чтение статуса отдельно, переключение шлюза — отдельная
+  привилегия (write).
+- Служба работает от root на первой итерации (nft/tproxy требуют
+  CAP_NET_ADMIN); усиление через ujail — §3.2 спецификации, `[проверить]`.
 
 Политика: [SECURITY.md](https://github.com/anatolijlaptev1991-ctrl/lavray/blob/main/docs/SECURITY.md)
-· Шлюз: [OPENWRT-GATEWAY.md](https://github.com/anatolijlaptev1991-ctrl/lavray/blob/main/docs/OPENWRT-GATEWAY.md).
+· Шлюз: [OPENWRT-GATEWAY.md](https://github.com/anatolijlaptev1991-ctrl/lavray/blob/main/docs/OPENWRT-GATEWAY.md)
+· Спецификация: [OPENWRT-PACKAGING.md](https://github.com/anatolijlaptev1991-ctrl/lavray/blob/main/docs/OPENWRT-PACKAGING.md).
 
 ## Лицензия
 

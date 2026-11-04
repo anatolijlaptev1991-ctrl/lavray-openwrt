@@ -1,0 +1,186 @@
+// SPDX-License-Identifier: GPL-3.0-only
+//
+// lavray — rpcd-плагин ucode (спецификация OPENWRT-PACKAGING.md §3.6).
+// Читает токен ядра (rpcd работает от root, файл 0600) и вызывает
+// unix-сокет ядра curl-ом (детерминированный HTTP/Connect без сборки
+// новых модулей; зависимость +curl декларирована в Makefile).
+//
+// Методы (ACL usr/share/rpcd/acl.d/luci-app-lavray.json):
+//   read : get_status, get_web, get_gateway, get_setup_code, get_policies
+//   write: set_gateway, set_device_policy
+//
+// Безопасность: токен ядра не попадает в командную строку curl (её видно
+// в /proc/<pid>/cmdline) — заголовок идёт из временного файла 0600,
+// тело JSON — тоже из файла. И то и другое удаляется сразу после вызова.
+// Ошибки ядра пробрасываются LuCI как {error, message}.
+
+'use strict';
+
+import { readfile, writefile, unlink, access, popen, chmod } from 'fs';
+import { connect as ubus_connect } from 'ubus';
+
+const SOCK = '/var/run/lavray/core.sock';
+const TOKEN_FILE = '/etc/lavray/core.token';
+const SETUP_CODE_FILE = '/etc/lavray/data/web-setup-code';
+
+let tmpSeq = 0;
+
+// Токен ядра — base64-строка от uci-defaults; проверяем charset, чтобы
+// содержимое файла не могло сработать инъекцией в sh (popen вызывает shell).
+function token_valid(tok) {
+	return length(tok) >= 32 && match(tok, /^[A-Za-z0-9+/=]+$/) != null;
+}
+
+// Один POST к ядру. Успех: {body: {...}}; сбой транспорта: null;
+// HTTP-ошибка Connect: {_http: <code>, body: {code, message}}.
+function core_call(service, method, args) {
+	if (!access(SOCK))
+		return null;
+
+	const token = trim(readfile(TOKEN_FILE) ?? '');
+
+	if (!token_valid(token))
+		return { _http: 401, body: { code: 'core_unavailable', message: 'токен ядра не читается' } };
+
+	tmpSeq++;
+	const body_file = '/tmp/lavray-rpc-body-' + time() + '-' + tmpSeq;
+	const head_file = '/tmp/lavray-rpc-head-' + time() + '-' + tmpSeq;
+
+	writefile(body_file, sprintf('%J', args ?? {}));
+	writefile(head_file, 'Authorization: Bearer ' + token + '\nContent-Type: application/json\nConnect-Protocol-Version: 1\n');
+	chmod(head_file, 600);
+	chmod(body_file, 600);
+
+	const cmd = '/usr/bin/curl -s --max-time 8 --unix-socket ' + SOCK +
+		' --header @' + head_file +
+		' -X POST --data-binary @' + body_file +
+		' http://localhost/lavray.v1.' + service + '/' + method;
+
+	const p = popen(cmd);
+	let out = '';
+
+	if (p) {
+		out = p.read('all');
+		p.close();
+	}
+
+	unlink(head_file);
+	unlink(body_file);
+
+	if (!length(out))
+		return null;
+
+	return { body: json(out) };
+}
+
+// Ответ rpcd: успех отдал тело как есть; ошибка Connect — {error, message}.
+function wrap(res) {
+	if (res === null)
+		return { error: 'core_unavailable', message: 'ядро не отвечает по сокету ' + SOCK };
+
+	const b = res.body ?? {};
+
+	if (b.code && b.message)
+		return { error: b.code, message: b.message };
+
+	return b;
+}
+
+// Состояние procd-службы — из ubus, без обращения к ядру.
+function service_running() {
+	try {
+		const conn = ubus_connect();
+		const state = conn.call('service', 'list', { name: 'lavrayd' });
+		const svc = (state != null) ? state['lavrayd'] : null;
+		const inst = (svc != null) ? svc.instances : null;
+
+		if (inst == null || inst['instance1'] == null)
+			return false;
+
+		return inst['instance1'].running === true;
+	} catch (e) {
+		return false;
+	}
+}
+
+const methods = {
+	get_status(args) {
+		const b = wrap(core_call('CoreService', 'GetStatus', {}));
+		b.service_running = service_running();
+		return b;
+	},
+
+	get_web(args) {
+		return wrap(core_call('WebSessionService', 'GetWebModeStatus', {}));
+	},
+
+	get_gateway(args) {
+		return wrap(core_call('GatewayService', 'GetGatewayStatus', {}));
+	},
+
+	get_policies(args) {
+		return wrap(core_call('GatewayService', 'ListDevicePolicies', {}));
+	},
+
+	// Код первого входа существует, пока админ не создан (ядро удаляет
+	// файл после SetupFirstAdmin). Чтение разрешено ACL-группой read,
+	// т.е. только авторизованному администратору LuCI (спецификация §5).
+	get_setup_code(args) {
+		const code = trim(readfile(SETUP_CODE_FILE) ?? '');
+		if (length(code) > 0)
+			return { present: true, code: code };
+		return { present: false };
+	},
+
+	// Отдельная привилегия: включение/выключение шлюза = Connect/Disconnect
+	// в режиме GATEWAY_TPROXY. Профиль берётся из данных ядра; если профиль
+	// не выбран, ядро отвечает invalid_argument — добавляем понятную
+	// подсказку выбрать профиль в панели.
+	set_gateway(args) {
+		const enable = args?.enable;
+
+		if (enable == null)
+			return { error: 'invalid_argument', message: 'нужен параметр enable (bool)' };
+
+		if (!enable)
+			return wrap(core_call('CoreService', 'Disconnect', {}));
+
+		const res = wrap(core_call('CoreService', 'Connect', { mode: 'CONNECT_MODE_GATEWAY_TPROXY' }));
+		if (res.error == 'invalid_argument')
+			res.message = (res.message ?? '') + ' — выберите профиль в веб-панели LAVRay';
+		return res;
+	},
+
+	set_device_policy(args) {
+		const mac = args?.mac;
+		const action = args?.action;
+
+		if (!mac || !action)
+			return { error: 'invalid_argument', message: 'нужны mac и action (proxy|direct|preset, для preset ещё preset_id)' };
+
+		let req = { policy: { mac: mac } };
+
+		switch (action) {
+		case 'proxy':
+			req.policy.action = 'ACTION_PROXY';
+			break;
+
+		case 'direct':
+			req.policy.action = 'ACTION_DIRECT';
+			break;
+
+		case 'preset':
+			req.policy.action = 'ACTION_PRESET';
+			if (args?.preset_id)
+				req.policy.preset_id = args.preset_id;
+			break;
+
+		default:
+			return { error: 'invalid_argument', message: 'action: proxy|direct|preset' };
+		}
+
+		return wrap(core_call('GatewayService', 'SetDevicePolicy', req));
+	}
+};
+
+return { lavray: methods };

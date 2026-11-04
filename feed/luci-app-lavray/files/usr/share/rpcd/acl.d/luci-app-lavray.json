@@ -1,0 +1,24 @@
+{
+	"luci-app-lavray": {
+		"description": "Статус LAVRay и переключатель шлюза",
+		"read": {
+			"ubus": {
+				"lavray": [
+					"get_status",
+					"get_web",
+					"get_gateway",
+					"get_setup_code",
+					"get_policies"
+				]
+			}
+		},
+		"write": {
+			"ubus": {
+				"lavray": [
+					"set_gateway",
+					"set_device_policy"
+				]
+			}
+		}
+	}
+}
