@@ -122,7 +122,7 @@ jobs:
           fail=0
           for f in $(git ls-files 'feed/*' 'scripts/*'); do
             case "$f" in
-              *.json|*.js|*.pub) continue ;;
+              *.json|*.js|*.pub|*.keep) continue ;;
             esac
             grep -q "SPDX-License-Identifier: GPL-3.0-only" "$f" || {
               echo "FAIL: нет SPDX в $f" >&2; fail=1; }
