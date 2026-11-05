@@ -46,9 +46,10 @@ define Package/lavrayd
   URL:=https://github.com/anatolijlaptev1991-ctrl/lavray
   DEPENDS:=@(x86_64||aarch64) +kmod-tun +kmod-nft-tproxy +ca-bundle +firewall4
   # Пользователь ссылается в правиле `meta skuid` таблицы inet lavray:
-  # имя должно существовать до применения правил. Явные id — детерминизм
-  # между устройствами; 377 не конфликтует с типовыми.
-  USERID:=lavray=377:lavray=377
+  # имя должно существовать до применения правил. Пустые id — авто-выдача
+  # при установке: фиксированный id конфликтует с фидом packages
+  # (377 занят apache — feeds install отказывал в установке пакета).
+  USERID:=lavray=:lavray=
 endef
 
 define Package/lavrayd/description
