@@ -28,9 +28,10 @@ else ifeq ($(ARCH),aarch64)
   LAVRAY_GOARCH:=arm64
   # arm64
   PKG_HASH:=17fc6bf6f7bd58a36a332a769defa727d132b20db61dc440f7c1dace0a0ff5d8
-else
-  $(error lavrayd: unsupported ARCH '$(ARCH)' — нужен x86_64 или aarch64)
 endif
+# Неподдерживаемые архитектуры отклоняет preinst при установке (§4.4);
+# $(error) здесь нельзя: метадата-скан фида выполняет make без целевой
+# архитектуры и падал бы на этой ветке.
 
 PKG_SOURCE:=lavray-core-linux-$(LAVRAY_GOARCH)
 PKG_SOURCE_URL:=https://github.com/anatolijlaptev1991-ctrl/lavray/releases/download/v$(PKG_VERSION)
