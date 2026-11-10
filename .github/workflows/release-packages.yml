@@ -75,6 +75,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
+    env:
+      SDK_VERSION: ${{ inputs.sdk_version || '24.10.8' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -86,17 +88,18 @@ jobs:
       - name: "Сборка дерева фида и tarball-ов по целям"
         run: |
           mkdir -p gh-pages feed-tars
-          # Дерево артефактов: artifacts/feed-<label>/<arch>/<feedname>/...
-          # В gh-pages: <label>/packages/... (arch внутри SDK равен метке).
+          # Дерево артефактов: artifacts/feed-<метка>/<arch>/<feedname>/...
+          # В gh-pages: <версия SDK>/<метка>/packages/... — как в docs/INSTALL.md
+          # и спецификации §4.2 (arch внутри SDK равен метке).
           for art in artifacts/feed-*; do
             [ -d "$art" ] || continue
-            name="$(basename "$art")"
+            label="$(basename "$art" | sed 's/^feed-//')"
             pkgdir="$(find "$art" -type d -name lavray | head -n1)"
             [ -n "$pkgdir" ] || pkgdir="$(find "$art" -type d -name packages | head -n1)"
             test -n "$pkgdir" || { echo "::error title=Нет пакетов::в $art нет каталога пакетов"; exit 1; }
-            (cd "$pkgdir" && tar -czf "$OLDPWD/feed-tars/$name.tar.gz" .)
-            mkdir -p "gh-pages/$name/packages"
-            cp "$pkgdir"/* "gh-pages/$name/packages/"
+            (cd "$pkgdir" && tar -czf "$OLDPWD/feed-tars/lavray-feed-$SDK_VERSION-$label.tar.gz" .)
+            mkdir -p "gh-pages/$SDK_VERSION/$label/packages"
+            cp "$pkgdir"/* "gh-pages/$SDK_VERSION/$label/packages/"
           done
           # Открытый ключ фида для роутеров (opkg-key add)
           [ -f feed/key.pub ] && cp feed/key.pub gh-pages/key.pub
