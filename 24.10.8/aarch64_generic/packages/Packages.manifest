@@ -1,0 +1,63 @@
+Package: lavray-webui
+Version: 0.9.1-r1
+Depends: libc, lavrayd
+Source: /feed/lavray-webui
+SourceName: lavray-webui
+License: GPL-3.0-only
+LicenseFiles: COPYING
+Section: net
+SourceDateEpoch: 1794342465
+URL: https://github.com/anatolijlaptev1991-ctrl/lavray
+Maintainer: LAVRay
+Architecture: all
+Installed-Size: 10240
+Filename: lavray-webui_0.9.1-r1_all.ipk
+Size: 1443
+SHA256sum: 53877df556f625a1e4c81e4e58b22ee0a4281016e2eff0ddbb2a7e45fe681e7e
+Description:  Metapackage: depends on lavrayd (panel is embedded in its binary) and
+ configures the panel for first use: listens on the router LAN address
+ with TLS enabled. The setup code for the first admin is printed to
+ /etc/lavray/data/web-setup-code by the core; see LuCI page or SSH.
+
+Package: lavrayd
+Version: 0.9.1-r1
+Depends: libc, kmod-tun, kmod-nft-tproxy, ca-bundle, firewall4
+Source: /feed/lavrayd
+SourceName: lavrayd
+License: GPL-3.0-only
+Section: net
+Require-User: lavray:lavray
+SourceDateEpoch: 1794342465
+URL: https://github.com/anatolijlaptev1991-ctrl/lavray
+Maintainer: LAVRay
+Architecture: aarch64_generic
+Installed-Size: 53719040
+Filename: lavrayd_0.9.1-r1_aarch64_generic.ipk
+Size: 18220048
+SHA256sum: ddb04baad0503b1ff4428e53f6719cc731c0b3ea3041bcbe83964c79e4272372
+Description:  LAVRay core daemon: sing-box proxy with embedded web panel, ConnectRPC
+ API and OpenWrt tproxy gateway (per-MAC policies, watchdog, fw4 include).
+ Panel address is taken from UCI (lavray.main.listen); TLS is on by
+ default in lavray-webui. Supported: x86_64 and aarch64, 256 MiB RAM min.
+
+Package: luci-app-lavray
+Version: 0.9.1-r1
+Depends: libc, lavrayd, luci-base, curl
+Source: /feed/luci-app-lavray
+SourceName: luci-app-lavray
+License: GPL-3.0-only
+LicenseFiles: COPYING
+Section: luci
+SourceDateEpoch: 1794342465
+URL: https://github.com/anatolijlaptev1991-ctrl/lavray
+Maintainer: LAVRay
+Architecture: all
+Installed-Size: 30720
+Filename: luci-app-lavray_0.9.1-r1_all.ipk
+Size: 6608
+SHA256sum: 1785dc410450aae32ef449e3e1283947e2a9f338b0ed5c739520682ef1f6ffd1
+Description:  LuCI app: service status, certificate fingerprint (shown before first
+ login), first-admin setup code, gateway toggle. Backend is an rpcd ucode
+ plugin that talks to the core socket with curl --unix-socket (only root
+ reads the core token). The embedded panel itself opens in a new tab.
+

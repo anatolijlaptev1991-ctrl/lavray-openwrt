@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "architecture": "x86_64",
+  "packages": {
+    "lavray-webui": "0.9.1-r1",
+    "lavrayd": "0.9.1-r1",
+    "luci-app-lavray": "0.9.1-r1"
+  }
+}
