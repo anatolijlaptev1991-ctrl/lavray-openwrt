@@ -7,7 +7,8 @@
 # в cron. Существующие настройки не перетирает.
 
 mkdir -p /etc/lavray/data /var/run/lavray/active
-chmod 700 /etc/lavray
+# Аудит №3 P3-4: листинг data (имена файлов) не должен быть общедоступен.
+chmod 700 /etc/lavray /etc/lavray/data
 
 if [ ! -s /etc/lavray/core.token ]; then
 	umask 077
@@ -20,6 +21,10 @@ fi
 # безопасный дефолт 192.168.1.1:9090).
 if [ "$(uci -q get lavray.main.listen)" = "192.168.1.1:9090" ]; then
 	lanip="$(uci -q get network.lan.ipaddr)"
+	# Аудит №3 P2-3: при proto dhcp/relay network.lan.ipaddr пуст —
+	# берём фактический адрес через ubus; без этого демон биндится на
+	# несуществующий адрес и крашится (EADDRNOTAVAIL, respawn x5).
+	[ -n "$lanip" ] || lanip="$(ubus -S call network.interface.lan status 2>/dev/null | jsonfilter -e '@["ipv4-address"][0]' 2>/dev/null)"
 	[ -n "$lanip" ] && uci set lavray.main.listen="${lanip}:9090"
 fi
 uci commit lavray

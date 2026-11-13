@@ -38,6 +38,8 @@ endef
 define Package/lavray-webui/postinst
 [ "$$IPKG_INSTROOT" != "" ] && exit 0
 lanip="$$(uci -q get network.lan.ipaddr)"
+# Аудит №3 P2-3: при proto dhcp/relay ipaddr пуст — фактический адрес через ubus.
+[ -n "$$lanip" ] || lanip="$$(ubus -S call network.interface.lan status 2>/dev/null | jsonfilter -e '@["ipv4-address"][0]' 2>/dev/null)"
 cur="$$(uci -q get lavray.main.listen)"
 if [ -n "$$lanip" ] && { [ -z "$$cur" ] || [ "$$cur" = "192.168.1.1:9090" ]; }; then
   uci set lavray.main.listen="$${lanip}:9090"

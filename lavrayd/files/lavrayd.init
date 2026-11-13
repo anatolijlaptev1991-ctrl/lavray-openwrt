@@ -23,10 +23,27 @@ start_service() {
 	config_get wd main watchdog_min 5
 	config_get mark main fwmark 1
 	config_get lan main lan br-lan
+	# Аудит №3 P3-2: невалидный mark/port => ip rule молча падает под
+	# 2>/dev/null — tproxy мёртв без диагностики. Логируем и отказываем.
+	case "$mark:$port" in
+	  **[!0-9]*:*)
+	    logger -t lavrayd "fwmark/tpproxy_port должны быть числами, получено: mark=$mark port=$port"
+	    return 1
+	    ;;
+	esac
 	config_get memlimit main gomemlimit 96MiB
 	config_get gogc main gogc 50
 
 	mkdir -p /var/run/lavray/active /etc/lavray/data
+
+	# Аудит №3 P1-1: строка стража в /etc/crontabs/root не переживает
+	# sysupgrade (не входит в sysupgrade.conf и keep.d) — после прошивки
+	# kill-switch перестаёт сниматься и LAN остаётся без интернета.
+	# Идемпотентная самозалечка при каждом старте службы.
+	if ! grep -q '/usr/sbin/lavray-guard' /etc/crontabs/root 2>/dev/null; then
+		echo '*/1 * * * * /usr/sbin/lavray-guard' >> /etc/crontabs/root
+		/etc/init.d/cron restart >/dev/null 2>&1
+	fi
 
 	# Политика маршрутизации для tproxy: помеченные пакеты доставляются
 	# на локальный сокет ядра (таблица 100). Значения по умолчанию
@@ -40,7 +57,10 @@ start_service() {
 	}
 	# Запоминаем mark: stop_service должен снять правило с ТЕМ mark,
 	# с которым стартовали (пользователь мог сменить fwmark в UCI).
+	# Аудит №3 P2-1: то же для ipv6 — stop обязан снимать по состоянию
+	# НА МОМЕНТ СТАРТА, а не по «живому» UCI (иначе осиротевшие ip -6 rules).
 	echo "$mark" > /var/run/lavray/fwmark
+	echo "$ipv6" > /var/run/lavray/ipv6
 
 	procd_open_instance
 	procd_set_param command /usr/bin/lavray-core serve \
@@ -67,13 +87,14 @@ stop_service() {
 	nft delete table inet lavray 2>/dev/null
 	rm -f /var/run/lavray/active/*.nft
 	local mark="$(cat /var/run/lavray/fwmark 2>/dev/null || echo 1)"
+	local ipv6_started="$(cat /var/run/lavray/ipv6 2>/dev/null || echo 0)"
 	ip rule del fwmark "$mark" lookup 100 priority 100 2>/dev/null
 	ip route flush table 100 2>/dev/null
-	if [ "$(uci -q get lavray.main.ipv6)" = "1" ]; then
+	if [ "$ipv6_started" = "1" ]; then
 		ip -6 rule del fwmark "$mark" lookup 100 priority 100 2>/dev/null
 		ip -6 route flush table 100 2>/dev/null
 	fi
-	rm -f /var/run/lavray/fwmark
+	rm -f /var/run/lavray/fwmark /var/run/lavray/ipv6
 }
 
 # Хук rc.common срабатывает только при ОСТАНОВКЕ службы (после procd_kill):
@@ -82,6 +103,12 @@ stop_service() {
 # (спецификация §3.5) — service_stopped при падении не вызывается.
 service_stopped() {
 	/usr/sbin/lavray-guard
+}
+
+# Аудит №3 P3-3: без reload_service() rc.common делает reload = start,
+# и смена fwmark добавляет новые ip-правила, не снимая старых до reboot.
+reload_service() {
+	restart
 }
 
 service_triggers() {

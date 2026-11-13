@@ -14,7 +14,13 @@ nft list table inet lavray >/dev/null 2>&1 || exit 0
 # Повторная проверка: ядро могло стартовать между pidof и nft list
 # (окно гонки; ClearOrphans при старте в любом случае разрулит остатки).
 pidof lavray-core >/dev/null 2>&1 && exit 0
-nft delete table inet lavray
+# Аудит №3 P3-1: flock против параллельных запусков (cron + service_stopped),
+# и активный nft-файл снимаем ДО удаления таблицы — сузить окно
+# «файл есть, таблицы нет» для fw4-include.
+exec 9>/var/run/lavray/guard.lock
+flock 9 || exit 0
+nft list table inet lavray >/dev/null 2>&1 || exit 0
 rm -f /var/run/lavray/active/*.nft
+nft delete table inet lavray 2>/dev/null || exit 0
 logger -t lavray-guard "ядро не запущено: правила nft сняты"
 exit 0

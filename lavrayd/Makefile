@@ -7,27 +7,26 @@
 # Бинарь не собирается здесь: SDK только скачивает готовый lavray-core
 # из релиза и упаковывает. Сборка ядра — репозиторий lavray (release-linux).
 #
-# Хэши ниже — из SHA256SUMS-linux.txt релиза v0.9.1. CI (release-packages.yml)
-# подставляет хэши и версию того релиза, который упаковывает.
+# Версия и хеши обновляются вручную из SHA256SUMS-linux.txt соответствующего
+# релиза lavray при его выходе (аудит №2 P2-2: автоматической подстановки
+# CI нет; перед пушем сверять с gh release list).
 
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=lavrayd
-PKG_VERSION:=0.9.1
+PKG_VERSION:=0.9.3
 PKG_RELEASE:=1
-PKG_MAINTAINER:=LAVRay
+PKG_MAINTAINER:=LAVRay <262499256+anatolijlaptev1991-ctrl@users.noreply.github.com>
 PKG_LICENSE:=GPL-3.0-only
 
 ifeq ($(ARCH),x86_64)
   LAVRAY_GOARCH:=amd64
-  # Якорь sed для CI — строка ПЕРЕД PKG_HASH: inline-комментарий оставлял бы
-  # пробел в значении, и download.pl не распознавал бы SHA256.
-  # amd64
-  PKG_HASH:=145ad42a4f779a32096485b869bcbe2f51dcde62ff9fdee23195fd09a41ecc2d
+  # sha256(lavray-core-linux-amd64) из SHA256SUMS-linux.txt v0.9.3
+  PKG_HASH:=7f1fbfba2838afe16a374217729a654f6928fcfac903aa3604d93a8eaf37bab2
 else ifeq ($(ARCH),aarch64)
   LAVRAY_GOARCH:=arm64
-  # arm64
-  PKG_HASH:=17fc6bf6f7bd58a36a332a769defa727d132b20db61dc440f7c1dace0a0ff5d8
+  # sha256(lavray-core-linux-arm64) из SHA256SUMS-linux.txt v0.9.3
+  PKG_HASH:=9ed825b71774732d67d1e930644a1a26378e3bdaba16de36f4d909187293dc9b
 endif
 # Неподдерживаемые архитектуры отклоняет preinst при установке (§4.4);
 # $(error) здесь нельзя: метадата-скан фида выполняет make без целевой
@@ -63,6 +62,7 @@ endef
 
 # Не supported-архитектуры: понятный отказ до распаковки (спецификация §4.4).
 define Package/lavrayd/preinst
+#!/bin/sh
 [ "$$IPKG_INSTROOT" != "" ] && exit 0
 arch=$$(uname -m)
 case "$$arch" in
@@ -112,11 +112,19 @@ endef
 # Останов при удалении: снять правила nft и строку cron. Данные
 # /etc/lavray (настройки, пользователи панели, сертификат) не удаляются.
 define Package/lavrayd/prerm
+#!/bin/sh
 [ "$$IPKG_INSTROOT" != "" ] && exit 0
 /etc/init.d/lavrayd stop >/dev/null 2>&1
 sed -i '\#usr/sbin/lavray-guard#d' /etc/crontabs/root 2>/dev/null
 [ -f /etc/init.d/cron ] && /etc/init.d/cron restart >/dev/null 2>&1
 exit 0
+endef
+
+# Аудит №2 P2-1: opkg upgrade сохраняет только объявленные conffiles —
+# без объявления пользовательский UCI-конфиг затирался дефолтом, служба
+# молча не стартовала (enabled=1 терялся, listen откатывался).
+define Package/lavrayd/conffiles
+/etc/config/lavray
 endef
 
 $(eval $(call BuildPackage,lavrayd))

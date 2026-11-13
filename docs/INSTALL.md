@@ -51,7 +51,8 @@ opkg install luci-app-lavray   # тянет lavray-webui и lavrayd
 - ставит include fw4 `/usr/share/nftables.d/ruleset-post/lavray.nft`;
 - ставит страж `/usr/sbin/lavray-guard` и строку cron раз в минуту;
 - метапакет `lavray-webui` подставляет LAN-адрес роутера в адрес панели
-  (`network.lan.ipaddr`), включает TLS и разрешает автозапуск.
+  (`network.lan.ipaddr` или фактический адрес LAN через ubus — аудитор №3),
+  включает TLS, разрешает автозапуск и запускает службу.
 
 ## 3. Первый вход в панель
 
@@ -64,6 +65,10 @@ opkg install luci-app-lavray   # тянет lavray-webui и lavrayd
 - LuCI: «Сервисы → LAVRay» → «Код первичной настройки» (rpcd читает файл
   от root и показывает только авторизованному администратору LuCI);
 - SSH: `cat /etc/lavray/data/web-setup-code`.
+
+Служба запускается автоматически при установке; если нет —
+`/etc/init.d/lavrayd start` (аудитор №3 P2-4: код настройки пишется ядром
+при первом запуске).
 
 Код одноразовый: после создания администратора ядро удаляет файл. Затем
 вход, серверы, подписки — как в приложении; шлюз (tproxy) и политики
@@ -95,6 +100,10 @@ uci commit lavray
 Ready. После `fw4 reload` таблица возвращается через include. Если ядро
 убито (kill -9, OOM), страж `lavray-guard` снимает правила за минуту —
 интернет LAN идёт напрямую.
+
+
+Для пакета lavrayd без webui:
+`/etc/init.d/lavrayd enable` — автозапуск после reboot (аудитор №3 P3-6).
 
 ## 5. Проверка
 
