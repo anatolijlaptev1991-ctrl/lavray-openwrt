@@ -1,0 +1,21 @@
+# Секреты и ключи (не должны попадать в репо ни при каких обстоятельствах)
+*.sec
+feed/*.sec
+feed/key-build*
+key-build*
+.keys-backup/
+
+# Локальные сборки SDK и фида
+/bin/
+/logs/
+*.ipk
+Packages
+Packages.gz
+Packages.sig
+Packages.manifest
+index.json
+*.tar.gz
+
+# Рабочие файлы
+.env
+*.swp

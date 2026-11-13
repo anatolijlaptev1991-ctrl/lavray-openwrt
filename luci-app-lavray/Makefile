@@ -13,7 +13,7 @@ PKG_VERSION:=0.9.1
 PKG_RELEASE:=1
 PKG_MAINTAINER:=LAVRay
 PKG_LICENSE:=GPL-3.0-only
-PKG_LICENSE_FILES:=COPYING
+PKG_LICENSE_FILES:=LICENSE
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -23,7 +23,7 @@ define Package/luci-app-lavray
   SUBMENU:=3. Applications
   TITLE:=LuCI status page for LAVRay gateway and web panel
   URL:=https://github.com/anatolijlaptev1991-ctrl/lavray
-  DEPENDS:=+lavrayd +luci-base +curl
+  DEPENDS:=+lavrayd +lavray-webui +luci-base +rpcd +curl
   PKGARCH:=all
 endef
 

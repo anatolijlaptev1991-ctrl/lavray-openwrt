@@ -7,7 +7,6 @@
 					"get_status",
 					"get_web",
 					"get_gateway",
-					"get_setup_code",
 					"get_policies"
 				]
 			}
@@ -16,7 +15,8 @@
 			"ubus": {
 				"lavray": [
 					"set_gateway",
-					"set_device_policy"
+					"set_device_policy",
+					"get_setup_code"
 				]
 			}
 		}

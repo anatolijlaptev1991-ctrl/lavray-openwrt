@@ -12,18 +12,31 @@
 // Безопасность: токен ядра не попадает в командную строку curl (её видно
 // в /proc/<pid>/cmdline) — заголовок идёт из временного файла 0600,
 // тело JSON — тоже из файла. И то и другое удаляется сразу после вызова.
+// writefile следует по симлинкам, поэтому временные файлы живут в
+// выделенном каталоге 0700: чужой симлинк туда создать невозможно
+// (аудит №1/№4: предсказуемые имена в /tmp + chmod 600 после записи =
+// root-перезапись произвольного файла через symlink).
 // Ошибки ядра пробрасываются LuCI как {error, message}.
 
 'use strict';
 
-import { readfile, writefile, unlink, access, popen, chmod } from 'fs';
+import { readfile, writefile, unlink, access, popen, chmod, mkdir } from 'fs';
 import { connect as ubus_connect } from 'ubus';
 
 const SOCK = '/var/run/lavray/core.sock';
 const TOKEN_FILE = '/etc/lavray/core.token';
 const SETUP_CODE_FILE = '/etc/lavray/data/web-setup-code';
+const TMP_DIR = '/var/run/lavray/rpc';
 
 let tmpSeq = 0;
+
+// Каталог 0700 под временные файлы с токеном; idемпотентно, права
+// перезакрепляем на случай старой версии с более широкими.
+function tmp_dir() {
+	mkdir(TMP_DIR, 0o700);
+	chmod(TMP_DIR, 0o700);
+	return TMP_DIR;
+}
 
 // Токен ядра — base64-строка от uci-defaults; проверяем charset, чтобы
 // содержимое файла не могло сработать инъекцией в sh (popen вызывает shell).
@@ -43,13 +56,14 @@ function core_call(service, method, args) {
 		return { _http: 401, body: { code: 'core_unavailable', message: 'токен ядра не читается' } };
 
 	tmpSeq++;
-	const body_file = '/tmp/lavray-rpc-body-' + time() + '-' + tmpSeq;
-	const head_file = '/tmp/lavray-rpc-head-' + time() + '-' + tmpSeq;
+	const dir = tmp_dir();
+	const body_file = dir + '/body-' + tmpSeq;
+	const head_file = dir + '/head-' + tmpSeq;
 
 	writefile(body_file, sprintf('%J', args ?? {}));
 	writefile(head_file, 'Authorization: Bearer ' + token + '\nContent-Type: application/json\nConnect-Protocol-Version: 1\n');
-	chmod(head_file, 600);
-	chmod(body_file, 600);
+	chmod(head_file, 0o600);
+	chmod(body_file, 0o600);
 
 	const cmd = '/usr/bin/curl -s --max-time 8 --unix-socket ' + SOCK +
 		' --header @' + head_file +

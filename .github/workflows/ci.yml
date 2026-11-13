@@ -109,9 +109,9 @@ jobs:
       - name: "Секреты в репозитории отсутствуют"
         run: |
           # usign-ключ фида, приватные ключи обновлений, токены.
-          # Паттерн исключает .github — иначе grep сработает на сам себя
+          # Исключаем только сам файл проверки (аудит №1 P3-4)
           if git grep -n -E 'untrusted comment: .*secret|untrusted comment: .*private key|BEGIN (RSA|EC|OPENSSH) PRIVATE KEY' \
-               -- ':!docs' -- ':!.github'; then
+               -- ':!.github/workflows/ci.yml'; then
             echo "FAIL: похоже на приватный ключ" >&2
             exit 1
           fi

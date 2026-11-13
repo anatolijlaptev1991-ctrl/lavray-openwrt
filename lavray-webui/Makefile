@@ -12,7 +12,7 @@ PKG_VERSION:=0.9.1
 PKG_RELEASE:=1
 PKG_MAINTAINER:=LAVRay
 PKG_LICENSE:=GPL-3.0-only
-PKG_LICENSE_FILES:=COPYING
+PKG_LICENSE_FILES:=LICENSE
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -45,7 +45,9 @@ fi
 if [ "$$(uci -q get lavray.main.tls)" != "0" ]; then
   uci set lavray.main.tls='1'
 fi
-if [ "$$(uci -q get lavray.main.enabled)" != "1" ] && [ "$$(uci -q get lavray.main.enabled)" != "0" ]; then
+# Аудит №4 P2-3: enabled задаётся только при ОТСУТСТВИИ опции (первая
+# установка); явный '0'/'1' пользователя при upgrade сохраняется.
+if [ -z "$$(uci -q get lavray.main.enabled)" ]; then
   uci set lavray.main.enabled='1'
 fi
 uci commit lavray
