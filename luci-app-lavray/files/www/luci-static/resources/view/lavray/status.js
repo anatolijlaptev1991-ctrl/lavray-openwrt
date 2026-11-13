@@ -78,6 +78,23 @@ function renderWeb() {
 	return E('table', { 'class': 'table' }, items);
 }
 
+// Аудит №4 P3-5: ссылка только для конкретного адреса (0.0.0.0 ведёт на
+// localhost браузера и не работает; IPv6 без скобок — невалидный URL).
+function panelUrl() {
+	var w = state.web || {};
+	var addr = w.bindAddress || '';
+	if (!addr || addr.startsWith('0.0.0.0') || addr.indexOf('[') == 0 || (addr.indexOf(':') >= 0 && addr.indexOf('.') < 0))
+		return null;
+	return 'http' + ((w.tlsEnabled) ? 's' : '') + '://' + addr + '/';
+}
+
+function panelLink() {
+	var url = panelUrl();
+	if (url)
+		return E('p', {}, E('a', { 'href': url, 'target': '_blank', 'rel': 'noopener' }, _('Открыть панель в новой вкладке')));
+	return E('p', { 'class': 'alert-message info' }, _('Панель доступна на адресе, указанном выше (открывайте с устройства в LAN)'));
+}
+
 function renderGateway() {
 	var e = errText(state.gateway);
 	if (e)
@@ -129,15 +146,7 @@ return view.extend({
 			E('div', { 'id': 'lavray-status', 'class': 'cbi-section' }, renderStatus()),
 			E('h3', {}, _('Веб-панель')),
 			E('div', { 'id': 'lavray-web', 'class': 'cbi-section' }, renderWeb()),
-			E('p', {},
-				E('a', {
-					'href': state.web && state.web.bindAddress
-						? 'http' + ((state.web.tlsEnabled) ? 's' : '') + '://' + (state.web.bindAddress || '') + '/'
-						: '#',
-					'target': '_blank',
-					'rel': 'noopener'
-				}, _('Открыть панель в новой вкладке'))
-			),
+			panelLink(),
 			E('h3', {}, _('Шлюз (tproxy)')),
 			E('div', { 'id': 'lavray-gateway', 'class': 'cbi-section' }, renderGateway()),
 			E('div', { 'class': 'alert-message info' },
