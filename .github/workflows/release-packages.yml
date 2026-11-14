@@ -88,7 +88,7 @@ jobs:
 
       # Аудит №5 P3-7: один dl/ на 4 матричных jobs — не качать исходники заново.
       - name: "Кэш dl/"
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: dl
           key: dl-${{ matrix.label }}-${{ env.SDK_VERSION }}
