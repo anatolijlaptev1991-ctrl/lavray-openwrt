@@ -5,9 +5,11 @@
 // unix-сокет ядра curl-ом (детерминированный HTTP/Connect без сборки
 // новых модулей; зависимость +curl декларирована в Makefile).
 //
-// Методы (ACL usr/share/rpcd/acl.d/luci-app-lavray.json):
-//   read : get_status, get_web, get_gateway, get_setup_code, get_policies
-//   write: set_gateway, set_device_policy
+// Методы (ACL usr/share/rpcd/acl.d/luci-app-lavray.json, синхронизировано
+// с аудитом №7 P3-6; get_setup_code — write: код настройки равен доступу
+// уровня администратора):
+//   read : get_status, get_web, get_gateway
+//   write: set_gateway, get_setup_code
 //
 // Безопасность: токен ядра не попадает в командную строку curl (её видно
 // в /proc/<pid>/cmdline) — заголовок идёт из временного файла 0600,

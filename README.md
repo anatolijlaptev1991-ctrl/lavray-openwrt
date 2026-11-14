@@ -28,9 +28,10 @@ OpenWrt — каталоги пакетов на верхнем уровне), �
 
 Поддерживаются OpenWrt 24.10 (opkg, `.ipk`), архитектуры `x86_64` и
 `aarch64` (cortex-a53, cortex-a72, generic — один бинарь arm64 под тремя
-метками). Минимум на устройстве: 256 МБ ОЗУ, 64 МБ overlay. На mipsel_24kc
-(MT7621) не работает — `preinst` откажется с объяснением. Фид для 25.12+
-(apk) появится отдельной итерацией (§4.3 спецификации, `[проверить]`).
+метками). Минимум на устройстве: 256 МБ ОЗУ, 100 МБ overlay (бинарь ~57 МБ
++ данные/логи; аудит №7 P2-4). На mipsel_24kc (MT7621) не работает —
+`preinst` откажется с объяснением. Фид для 25.12+ (apk) появится отдельной
+итерацией (§4.3 спецификации, `[проверить]`).
 
 ---
 
@@ -43,12 +44,14 @@ CI публикует фид на GitHub Pages этого репозитория
 ключом фида — [`docs/INSTALL.md`](docs/INSTALL.md):
 
 ```sh
-src/gz lavray https://anatolijlaptev1991-ctrl.github.io/lavray-openwrt/<версия OpenWrt>/<метка>/packages
+echo 'src/gz lavray https://anatolijlaptev1991-ctrl.github.io/lavray-openwrt/24.10.8/x86_64/packages' >> /etc/opkg/customfeeds.conf
 opkg update && opkg install luci-app-lavray
 ```
 
-Индекс подписан usign: открытый ключ — `feed/key.pub` (генерируется
-workflow `feed-key` вручную, секрет хранится в Environment `feed-signing`).
+Каталог в URL — патч-версия SDK публикации (сейчас `24.10.8`; аудит №7
+P1-1). Индекс подписан usign: открытый ключ — `feed/key.pub`, он
+закоммичен в репозитории и публикуется в корень фида; подпись — ключом
+`KEY_BUILD` из секрета `LAVRAY_FEED_KEY` (Environment `feed-signing`).
 
 ### 2. Вручную (.ipk из релиза)
 
@@ -60,11 +63,12 @@ opkg install lavrayd_<ver>_<arch>.ipk lavray-webui_<ver>_all.ipk luci-app-lavray
 
 ## Настройка
 
-UCI `/etc/config/lavray` (спецификация §3.2):
+UCI `/etc/config/lavray` (спецификация §3.2; опция `enabled` при поставке
+отсутствует — «не решено»; postinst метапакета ставит '1' при первой
+установке, а `uci set lavray.main.enabled='0'` — способ выключить шлюз):
 
 ```
 config lavray 'main'
-	option enabled '0'
 	option listen '192.168.1.1:9090'   # --web-bind; uci-defaults ставит network.lan.ipaddr
 	option tls '1'                     # --web-tls
 	option tproxy_port '7893'

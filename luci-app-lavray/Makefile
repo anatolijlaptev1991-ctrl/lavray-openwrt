@@ -9,7 +9,9 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-lavray
-PKG_VERSION:=0.9.1
+# Метапакеты версионируются вместе с lavrayd (аудит №6 P3-2): смесь версий
+# в индексе фида путает сверку.
+PKG_VERSION:=0.9.3
 PKG_RELEASE:=1
 PKG_MAINTAINER:=LAVRay
 PKG_LICENSE:=GPL-3.0-only

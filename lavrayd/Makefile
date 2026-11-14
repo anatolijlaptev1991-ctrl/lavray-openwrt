@@ -73,9 +73,21 @@ case "$$arch" in
     ;;
 esac
 ram=$$(awk '/^MemTotal:/{print $$2}' /proc/meminfo)
-# 262144 кБ = 256 МиБ; MemTotal всегда чуть меньше номинала платы.
-if [ -n "$$ram" ] && [ "$$ram" -lt 262144 ]; then
+# Аудит №7 P3-3: у плат с номинальными 256 МБ MemTotal ≈ 246–250 МБ —
+# порог 262144 кБ отсекал заявленный минимум. 230000 кБ ≈ 225 МиБ.
+if [ -n "$$ram" ] && [ "$$ram" -lt 230000 ]; then
   echo "LAVRay: недостаточно ОЗУ ($$ram кБ): нужно не менее 256 МБ" >&2
+  exit 1
+fi
+# Аудит №7 P2-4: бинарь ~57 МБ, плюс данные/логи/кэш LuCI — место на
+# overlay обязано быть с запасом (максимум из / и /overlay покрывает extroot).
+free=$$(df -k /overlay 2>/dev/null | awk 'NR==2{print $$4}')
+free_root=$$(df -k / 2>/dev/null | awk 'NR==2{print $$4}')
+for f in $$free $$free_root; do
+  if [ -n "$$f" ] && [ "$$f" -gt "$${free:-0}" ]; then free=$$f; fi
+done
+if [ -n "$$free" ] && [ "$$free" -lt 92160 ]; then
+  echo "LAVRay: мало места на overlay ($$free кБ свободно): нужно не менее 100 МБ" >&2
   exit 1
 fi
 exit 0

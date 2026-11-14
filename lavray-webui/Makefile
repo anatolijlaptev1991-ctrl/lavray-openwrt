@@ -8,7 +8,10 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=lavray-webui
-PKG_VERSION:=0.9.1
+# Метапакеты версионируются вместе с lavrayd: бамп гарантирует, что postinst
+# переиграет при `opkg upgrade` и выставит enabled/start (аудит №6 P3-2,
+# №7 P2-3).
+PKG_VERSION:=0.9.3
 PKG_RELEASE:=1
 PKG_MAINTAINER:=LAVRay
 PKG_LICENSE:=GPL-3.0-only
@@ -54,6 +57,10 @@ if [ -z "$$(uci -q get lavray.main.enabled)" ]; then
 fi
 uci commit lavray
 /etc/init.d/lavrayd enable >/dev/null 2>&1
+# Аудит №7 P2-1: default_postinst запускает lavrayd раньше конца транзакции
+# (когда enabled ещё не установлен) — стартуем здесь, после configure всех
+# опций. Для явного enabled='0' start — no-op (страж в init).
+/etc/init.d/lavrayd start >/dev/null 2>&1
 echo "LAVRay: панель $$(uci -q get lavray.main.listen) (TLS), код первого входа: cat /etc/lavray/data/web-setup-code"
 exit 0
 endef
