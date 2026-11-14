@@ -1,46 +1,46 @@
 Package: lavray-webui
-Version: 0.9.1-r1
+Version: 0.9.3-r1
 Depends: libc, lavrayd
 License: GPL-3.0-only
 Section: net
 URL: https://github.com/anatolijlaptev1991-ctrl/lavray
 Architecture: all
 Installed-Size: 10240
-Filename: lavray-webui_0.9.1-r1_all.ipk
-Size: 1443
-SHA256sum: 53877df556f625a1e4c81e4e58b22ee0a4281016e2eff0ddbb2a7e45fe681e7e
+Filename: lavray-webui_0.9.3-r1_all.ipk
+Size: 1898
+SHA256sum: 6ff61e4bbdfb57157ed7d7eb858c00c8ecdff25e5cc29885db46adf847a3056d
 Description:  Metapackage: depends on lavrayd (panel is embedded in its binary) and
  configures the panel for first use: listens on the router LAN address
  with TLS enabled. The setup code for the first admin is printed to
  /etc/lavray/data/web-setup-code by the core; see LuCI page or SSH.
 
 Package: lavrayd
-Version: 0.9.1-r1
+Version: 0.9.3-r1
 Depends: libc, kmod-tun, kmod-nft-tproxy, ca-bundle, firewall4
 License: GPL-3.0-only
 Section: net
 URL: https://github.com/anatolijlaptev1991-ctrl/lavray
 Architecture: x86_64
-Installed-Size: 57251840
-Filename: lavrayd_0.9.1-r1_x86_64.ipk
-Size: 19958299
-SHA256sum: 32b8bc0111ee74b0cc0207c16c6eac214a2a208f245459bfedd7e53ca3badab8
+Installed-Size: 57313280
+Filename: lavrayd_0.9.3-r1_x86_64.ipk
+Size: 19985847
+SHA256sum: 4808c140a89dee06807d26ec07312b999f6076fb5fa9e1f71dbf890205ac0634
 Description:  LAVRay core daemon: sing-box proxy with embedded web panel, ConnectRPC
  API and OpenWrt tproxy gateway (per-MAC policies, watchdog, fw4 include).
  Panel address is taken from UCI (lavray.main.listen); TLS is on by
  default in lavray-webui. Supported: x86_64 and aarch64, 256 MiB RAM min.
 
 Package: luci-app-lavray
-Version: 0.9.1-r1
-Depends: libc, lavrayd, luci-base, curl
+Version: 0.9.3-r1
+Depends: libc, lavrayd, lavray-webui, luci-base, rpcd, curl
 License: GPL-3.0-only
 Section: luci
 URL: https://github.com/anatolijlaptev1991-ctrl/lavray
 Architecture: all
 Installed-Size: 30720
-Filename: luci-app-lavray_0.9.1-r1_all.ipk
-Size: 6608
-SHA256sum: 1785dc410450aae32ef449e3e1283947e2a9f338b0ed5c739520682ef1f6ffd1
+Filename: luci-app-lavray_0.9.3-r1_all.ipk
+Size: 7276
+SHA256sum: af05fe9cfd31b7ede495ba712cdfcb8c98c149c20e66dd00629ba3b839e1e7b5
 Description:  LuCI app: service status, certificate fingerprint (shown before first
  login), first-admin setup code, gateway toggle. Backend is an rpcd ucode
  plugin that talks to the core socket with curl --unix-socket (only root
