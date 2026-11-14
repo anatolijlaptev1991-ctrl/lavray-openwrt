@@ -194,10 +194,10 @@ jobs:
           ls -la feed-tars/
 
       # Аудит №5 P2-1: не затирать существующее дерево целиком — фетчим
-      # gh-pages, скатываем feedtree/ ПОВЕРХ корня ветки (обновляются только
-      # каталоги $SDK_VERSION/<метка>/packages) и не коммитим служебные
-      # каталоги сборки (аудит-фикс 14.11: прогон v0.9.3 закоммитил
-      # artifacts/, feed-tars/ и вложенное gh-pages/ — сайт отдавал 0.9.1).
+      # gh-pages в ОТДЕЛЬНЫЙ worktree (в основном worktree остаются
+      # feedtree/, artifacts/, feed-tars/ — их коллизии с треками ветки
+      # валили checkout 14.11) и скатываем feedtree/ ПОВЕРХ корня ветки:
+      # обновляются только каталоги $SDK_VERSION/<метка>/packages.
       - name: "gh-pages: точечная публикация фида"
         env:
           # Аудит №5 P3-1: ref_name через step-env — без интерполяции в shell.
@@ -205,20 +205,20 @@ jobs:
         run: |
           set -euo pipefail
           if git fetch origin gh-pages 2>/dev/null; then
-            git checkout -q -B gh-pages origin/gh-pages
+            git worktree add -f gh-pages-wt origin/gh-pages
           else
-            # Первая публикация: чистый worktree — только собранное дерево.
-            git init -q -b gh-pages
-            git rm -rq --cached -r . 2>/dev/null || true
-            find . -mindepth 1 -maxdepth 1 -not -name .git -not -name feedtree -exec rm -rf {} +
+            # Первая публикация: чистое дерево.
+            git worktree add --orphan -b gh-pages gh-pages-wt
           fi
-          cp -a feedtree/. .
-          rm -rf feedtree artifacts feed-tars gh-pages
-          git config user.name "lavray-openwrt-ci"
-          git config user.email "noreply@github.com"
-          git add -A
-          git commit -qm "feed: $REF_NAME"
-          git push -qf origin gh-pages
+          cp -a feedtree/. gh-pages-wt/
+          # Мусор сбойного прогона v0.9.3 (артефакты сборки в корне ветки).
+          rm -rf gh-pages-wt/artifacts gh-pages-wt/feed-tars gh-pages-wt/gh-pages
+          git -C gh-pages-wt config user.name "lavray-openwrt-ci"
+          git -C gh-pages-wt config user.email "noreply@github.com"
+          git -C gh-pages-wt add -A
+          git -C gh-pages-wt commit -qm "feed: $REF_NAME"
+          git -C gh-pages-wt push -qf origin HEAD:refs/heads/gh-pages
+          git worktree remove --force gh-pages-wt
           echo "фид: https://${GITHUB_REPOSITORY#*/}/"
 
       - name: "Релиз lavray-openwrt: tarball фида по целям"
