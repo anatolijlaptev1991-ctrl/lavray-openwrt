@@ -168,10 +168,10 @@ jobs:
       - name: "Сборка дерева фида и tarball-ов по целям"
         run: |
           set -euo pipefail
-          mkdir -p gh-pages feed-tars
+          mkdir -p feedtree feed-tars
           # Дерево артефактов: artifacts/feed-<метка>/<arch>/<feedname>/...
-          # В gh-pages: <версия SDK>/<метка>/packages/... — как в docs/INSTALL.md
-          # и спецификации §4.2 (arch внутри SDK равен метке).
+          # Сайт отдаёт КОРЕНЬ ветки gh-pages: <версия SDK>/<метка>/packages/
+          # (docs/INSTALL.md, спецификация §4.2; arch внутри SDK равен метке).
           for art in artifacts/feed-*; do
             [ -d "$art" ] || continue
             label="$(basename "$art" | sed 's/^feed-//')"
@@ -184,18 +184,20 @@ jobs:
             test -f "$pkgdir/Packages"    || { echo "::error title=Индекс::в $art нет Packages"; exit 1; }
             test -f "$pkgdir/Packages.sig" || { echo "::error title=Подпись::в $art нет Packages.sig"; exit 1; }
             (cd "$pkgdir" && tar -czf "$OLDPWD/feed-tars/lavray-feed-$SDK_VERSION-$label.tar.gz" .)
-            mkdir -p "gh-pages/$SDK_VERSION/$label/packages"
-            cp "$pkgdir"/* "gh-pages/$SDK_VERSION/$label/packages/"
+            mkdir -p "feedtree/$SDK_VERSION/$label/packages"
+            cp "$pkgdir"/* "feedtree/$SDK_VERSION/$label/packages/"
           done
           # Открытый ключ фида для роутеров (opkg-key add) — обязателен.
           test -f feed/key.pub || { echo "::error::нет feed/key.pub в теге"; exit 1; }
-          cp feed/key.pub gh-pages/key.pub
-          find gh-pages -type f | sort | head -30
+          cp feed/key.pub feedtree/key.pub
+          find feedtree -type f | sort | head -30
           ls -la feed-tars/
 
       # Аудит №5 P2-1: не затирать существующее дерево целиком — фетчим
-      # gh-pages и обновляем только каталог $SDK_VERSION/<метка>/packages;
-      # «Re-run» старого тега и параллельные теги больше не регрессируют фид.
+      # gh-pages, скатываем feedtree/ ПОВЕРХ корня ветки (обновляются только
+      # каталоги $SDK_VERSION/<метка>/packages) и не коммитим служебные
+      # каталоги сборки (аудит-фикс 14.11: прогон v0.9.3 закоммитил
+      # artifacts/, feed-tars/ и вложенное gh-pages/ — сайт отдавал 0.9.1).
       - name: "gh-pages: точечная публикация фида"
         env:
           # Аудит №5 P3-1: ref_name через step-env — без интерполяции в shell.
@@ -205,8 +207,13 @@ jobs:
           if git fetch origin gh-pages 2>/dev/null; then
             git checkout -q -B gh-pages origin/gh-pages
           else
+            # Первая публикация: чистый worktree — только собранное дерево.
             git init -q -b gh-pages
+            git rm -rq --cached -r . 2>/dev/null || true
+            find . -mindepth 1 -maxdepth 1 -not -name .git -not -name feedtree -exec rm -rf {} +
           fi
+          cp -a feedtree/. .
+          rm -rf feedtree artifacts feed-tars gh-pages
           git config user.name "lavray-openwrt-ci"
           git config user.email "noreply@github.com"
           git add -A
