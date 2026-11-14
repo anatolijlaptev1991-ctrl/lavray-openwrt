@@ -1,0 +1,76 @@
+Package: cgi-io
+Version: 2026.07.21~31cb3c89-r1
+Depends: libc, libubox20240329, libubus20250102
+Source: feeds/packages/net/cgi-io
+SourceName: cgi-io
+License: GPL-2.0-or-later
+Section: net
+SourceDateEpoch: 1784898749
+Maintainer: John Crispin <blogic@openwrt.org>
+Architecture: aarch64_generic
+Installed-Size: 81920
+Filename: cgi-io_2026.07.21~31cb3c89-r1_aarch64_generic.ipk
+Size: 10660
+SHA256sum: cb2586f1d5f2e75c508acdb0b537cebaab9243f0a34eb0f5d3523540830ff782
+Description:  This package contains an cgi utility that is useful for up/downloading files
+
+Package: curl
+Version: 8.19.0-r2
+Depends: libc, libcurl4
+Source: feeds/packages/net/curl
+SourceName: curl
+License: MIT
+LicenseFiles: COPYING
+Section: net
+SourceDateEpoch: 1784898749
+URL: https://curl.se/
+CPE-ID: cpe:/a:haxx:libcurl
+Maintainer: Aleksey Vasilenko <aleksey.vasilenko@gmail.com>
+Architecture: aarch64_generic
+Installed-Size: 204800
+Filename: curl_8.19.0-r2_aarch64_generic.ipk
+Size: 75015
+SHA256sum: f260f32a4786d2a8de93fa67e745d05f66aef9ea45b59106201bb863d94944ff
+Description:  A client-side URL transfer utility
+
+Package: libcurl4
+Version: 8.19.0-r2
+Depends: libc, libmbedtls21, zlib, libnghttp2-14, ca-bundle
+Provides: libcurl
+Source: feeds/packages/net/curl
+SourceName: curl
+License: MIT
+LicenseFiles: COPYING
+Section: libs
+SourceDateEpoch: 1784898749
+URL: https://curl.se/
+ABIVersion: 4
+CPE-ID: cpe:/a:haxx:libcurl
+Maintainer: Aleksey Vasilenko <aleksey.vasilenko@gmail.com>
+Architecture: aarch64_generic
+Installed-Size: 604160
+Filename: libcurl4_8.19.0-r2_aarch64_generic.ipk
+Size: 255531
+SHA256sum: 0b80e807010ad6017ba4e7f684ac9958d6e48165d0e118aa521ef5c36a9d91a0
+Description:  A client-side URL transfer library
+
+Package: libnghttp2-14
+Version: 1.63.0-r1
+Depends: libc
+Provides: libnghttp2
+Source: feeds/packages/libs/nghttp2
+SourceName: nghttp2
+License: MIT
+LicenseFiles: COPYING
+Section: libs
+SourceDateEpoch: 1784898749
+ABIVersion: -14
+CPE-ID: cpe:/a:nghttp2:nghttp2
+Maintainer: Hans Dedecker <dedeckeh@gmail.com>
+Architecture: aarch64_generic
+Installed-Size: 204800
+Filename: libnghttp2-14_1.63.0-r1_aarch64_generic.ipk
+Size: 73578
+SHA256sum: 57696017a9b0c664fca56a3dbf41478e2cd3f50ea304605f723e042a293d0441
+Description:  C library implementing the framing layer of the HTTP/2 protocol. It can be used to build a HTTP/2-capable HTTP client or server
+

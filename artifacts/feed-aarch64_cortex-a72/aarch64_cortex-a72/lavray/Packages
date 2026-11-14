@@ -1,0 +1,48 @@
+Package: lavray-webui
+Version: 0.9.3-r1
+Depends: libc, lavrayd
+License: GPL-3.0-only
+Section: net
+URL: https://github.com/anatolijlaptev1991-ctrl/lavray
+Architecture: all
+Installed-Size: 10240
+Filename: lavray-webui_0.9.3-r1_all.ipk
+Size: 1898
+SHA256sum: 99595023356a4ea7de5321d9d5a11fb9e144220d0fa371704599e6c42780aa69
+Description:  Metapackage: depends on lavrayd (panel is embedded in its binary) and
+ configures the panel for first use: listens on the router LAN address
+ with TLS enabled. The setup code for the first admin is printed to
+ /etc/lavray/data/web-setup-code by the core; see LuCI page or SSH.
+
+Package: lavrayd
+Version: 0.9.3-r1
+Depends: libc, kmod-tun, kmod-nft-tproxy, ca-bundle, firewall4
+License: GPL-3.0-only
+Section: net
+URL: https://github.com/anatolijlaptev1991-ctrl/lavray
+Architecture: aarch64_cortex-a72
+Installed-Size: 53729280
+Filename: lavrayd_0.9.3-r1_aarch64_cortex-a72.ipk
+Size: 18243493
+SHA256sum: bd1387680443fc234b392ff21c80de083140a2b02a12b8cdfa1974b924627637
+Description:  LAVRay core daemon: sing-box proxy with embedded web panel, ConnectRPC
+ API and OpenWrt tproxy gateway (per-MAC policies, watchdog, fw4 include).
+ Panel address is taken from UCI (lavray.main.listen); TLS is on by
+ default in lavray-webui. Supported: x86_64 and aarch64, 256 MiB RAM min.
+
+Package: luci-app-lavray
+Version: 0.9.3-r1
+Depends: libc, lavrayd, lavray-webui, luci-base, rpcd, curl
+License: GPL-3.0-only
+Section: luci
+URL: https://github.com/anatolijlaptev1991-ctrl/lavray
+Architecture: all
+Installed-Size: 30720
+Filename: luci-app-lavray_0.9.3-r1_all.ipk
+Size: 7269
+SHA256sum: c23ac57031af432b0d1b30007826e769cdfa66fd906bcbc7cf14cf4458a36d91
+Description:  LuCI app: service status, certificate fingerprint (shown before first
+ login), first-admin setup code, gateway toggle. Backend is an rpcd ucode
+ plugin that talks to the core socket with curl --unix-socket (only root
+ reads the core token). The embedded panel itself opens in a new tab.
+

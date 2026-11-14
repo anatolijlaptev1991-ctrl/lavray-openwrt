@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "architecture": "aarch64_cortex-a53",
+  "packages": {
+    "lavray-webui": "0.9.3-r1",
+    "lavrayd": "0.9.3-r1",
+    "luci-app-lavray": "0.9.3-r1"
+  }
+}

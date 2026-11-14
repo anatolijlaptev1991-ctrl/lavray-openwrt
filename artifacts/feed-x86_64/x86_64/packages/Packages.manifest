@@ -1,0 +1,76 @@
+Package: cgi-io
+Version: 2026.07.21~31cb3c89-r1
+Depends: libc, libubox20240329, libubus20250102
+Source: feeds/packages/net/cgi-io
+SourceName: cgi-io
+License: GPL-2.0-or-later
+Section: net
+SourceDateEpoch: 1784898749
+Maintainer: John Crispin <blogic@openwrt.org>
+Architecture: x86_64
+Installed-Size: 40960
+Filename: cgi-io_2026.07.21~31cb3c89-r1_x86_64.ipk
+Size: 9962
+SHA256sum: f57c4616da429308395ce0e81d215223d35f0bd68d472537e70a858f7e77c8c3
+Description:  This package contains an cgi utility that is useful for up/downloading files
+
+Package: curl
+Version: 8.19.0-r2
+Depends: libc, libcurl4
+Source: feeds/packages/net/curl
+SourceName: curl
+License: MIT
+LicenseFiles: COPYING
+Section: net
+SourceDateEpoch: 1784898749
+URL: https://curl.se/
+CPE-ID: cpe:/a:haxx:libcurl
+Maintainer: Aleksey Vasilenko <aleksey.vasilenko@gmail.com>
+Architecture: x86_64
+Installed-Size: 163840
+Filename: curl_8.19.0-r2_x86_64.ipk
+Size: 73125
+SHA256sum: 94e907d49652d2130c350eb626d52c6be8dfcdf76962f8be5f610bdc7215384c
+Description:  A client-side URL transfer utility
+
+Package: libcurl4
+Version: 8.19.0-r2
+Depends: libc, libmbedtls21, zlib, libnghttp2-14, ca-bundle
+Provides: libcurl
+Source: feeds/packages/net/curl
+SourceName: curl
+License: MIT
+LicenseFiles: COPYING
+Section: libs
+SourceDateEpoch: 1784898749
+URL: https://curl.se/
+ABIVersion: 4
+CPE-ID: cpe:/a:haxx:libcurl
+Maintainer: Aleksey Vasilenko <aleksey.vasilenko@gmail.com>
+Architecture: x86_64
+Installed-Size: 501760
+Filename: libcurl4_8.19.0-r2_x86_64.ipk
+Size: 240282
+SHA256sum: 850cf321ac07ad8263647263d11972ce4d68bf6c8d20f6bff3bf863da3a19210
+Description:  A client-side URL transfer library
+
+Package: libnghttp2-14
+Version: 1.63.0-r1
+Depends: libc
+Provides: libnghttp2
+Source: feeds/packages/libs/nghttp2
+SourceName: nghttp2
+License: MIT
+LicenseFiles: COPYING
+Section: libs
+SourceDateEpoch: 1784898749
+ABIVersion: -14
+CPE-ID: cpe:/a:nghttp2:nghttp2
+Maintainer: Hans Dedecker <dedeckeh@gmail.com>
+Architecture: x86_64
+Installed-Size: 174080
+Filename: libnghttp2-14_1.63.0-r1_x86_64.ipk
+Size: 70561
+SHA256sum: 142a7877b1ae0a352b1c80705639e5668186790eef6a8ff6c26898d36a82167d
+Description:  C library implementing the framing layer of the HTTP/2 protocol. It can be used to build a HTTP/2-capable HTTP client or server
+
