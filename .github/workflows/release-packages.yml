@@ -12,6 +12,10 @@ name: release-packages
 # Контейнеры: openwrt/sdk:<цель>-<патч-релиз> (пин 24.10.8; теги —
 # hub.docker.com/repositories/openwrt/sdk). Метка ipk внутри SDK остаётся
 # целевой (x86_64, aarch64_cortex-a53, ...), не именем контейнера.
+#
+# Actions запинены по commit SHA (аудит №5 P1-2): gh-action-sdk получает
+# приватный ключ фида, перезапись тега = исполнение кода с ключом.
+# Обновление — Dependabot (.github/dependabot.yml, github-actions).
 
 on:
   push:
@@ -33,8 +37,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  gate:
+    name: "Гейт: версия SDK и форма тега"
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: "SDK-версия существует для всех меток"
+        run: |
+          set -euo pipefail
+          sdk="${{ inputs.sdk_version || '24.10.8' }}"
+          for label in x86_64 aarch64_cortex-a53 aarch64_cortex-a72 aarch64_generic; do
+            docker manifest inspect "ghcr.io/openwrt/sdk:${label}-${sdk}" >/dev/null || {
+              echo "::error title=Нет SDK::ghcr.io/openwrt/sdk:${label}-${sdk} не существует"
+              exit 1
+            }
+          done
+          echo "SDK ${sdk} есть для всех 4 меток"
+
+      - name: "Тег в форме версии (на push тега)"
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          case "${GITHUB_REF_NAME}" in
+            v[0-9]*.[0-9]*.[0-9]*|v[0-9]*.[0-9]*) ;;
+            *) echo "::error title=Тег::${GITHUB_REF_NAME} не выглядит версией (vX.Y[.Z])"; exit 1 ;;
+          esac
+          echo "тег ${GITHUB_REF_NAME} — ок"
+
+  build:
+    name: "SDK: lavrayd + webui + luci (${{ matrix.label }})"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    needs: gate
     env:
       KEY_BUILD: ${{ secrets.LAVRAY_FEED_KEY }}
       SDK_VERSION: ${{ inputs.sdk_version || '24.10.8' }}
@@ -48,10 +84,18 @@ jobs:
           - { label: 'aarch64_generic' }
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # Аудит №5 P3-7: один dl/ на 4 матричных jobs — не качать исходники заново.
+      - name: "Кэш dl/"
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: dl
+          key: dl-${{ matrix.label }}-${{ env.SDK_VERSION }}
+          restore-keys: dl-${{ matrix.label }}-
 
       - name: "SDK-сборка: lavrayd, lavray-webui, luci-app-lavray (${{ matrix.label }})"
-        uses: openwrt/gh-action-sdk@v6
+        uses: openwrt/gh-action-sdk@1f698a6cf6cb7f7dfd2ed534165e0d67fa5b98fb # v6
         env:
           ARCH: ${{ matrix.label }}-${{ env.SDK_VERSION }}
           FEEDNAME: lavray
@@ -60,10 +104,41 @@ jobs:
           NO_SHFMT_CHECK: 1
           V: ''
 
+      # Аудит №5 P1-1: gh-action-sdk при «Skipping $PKG» выходит с кодом 0 —
+      # зелёная сборка при нуле пакетов. Жёсткая проверка: ровно 3 ipk
+      # (lavrayd/lavray-webui/luci-app-lavray), каждый нетривиального размера.
+      - name: "Верификация: 3 ipk собраны"
+        run: |
+          set -euo pipefail
+          count=0
+          for glob in \
+            bin/packages/*/lavray/lavrayd_*.ipk \
+            bin/packages/*/lavray/lavray-webui_*.ipk \
+            bin/packages/*/lavray/luci-app-lavray_*.ipk; do
+            for f in $glob; do
+              test -s "$f" || { echo "::error title=Пусто::$f"; exit 1; }
+              test "$(stat -c%s "$f")" -gt 1024 || { echo "::error title=Подозрительно мал::$f"; exit 1; }
+              count=$((count + 1))
+            done
+          done
+          test "$count" -eq 3 || {
+            echo "::error title=Пакеты::ожидались 3 ipk, найдено $count — сборка молча пропустила пакет"
+            exit 1
+          }
+          echo "3 ipk на месте"
+
+      # Аудит №5 P2-2: при падении SDK — сводка ошибок в job (не в артефакты,
+      # см. аудит №1 P3-1: verbose может раскрыть материал подписи).
+      - name: "Диагностика: ошибки SDK"
+        if: failure()
+        run: |
+          grep -aE "Error |error:|undefined reference|collected errors" logs/*.log 2>/dev/null | tail -100 || true
+
       - name: "Артефакт: feed-${{ matrix.label }}"
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: feed-${{ matrix.label }}
+          if-no-files-found: error
           # logs не публикуем (аудит №1 P3-1): артефакт публичен, verbose-лог
           # может раскрыть материал подписи.
           path: |
@@ -71,23 +146,28 @@ jobs:
             bin/packages/*/packages/*
 
   publish:
+    name: "Публикация фида"
     needs: build
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
     env:
       SDK_VERSION: ${{ inputs.sdk_version || '24.10.8' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: true
 
       - name: "Скачивание артефактов"
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: artifacts
 
       - name: "Сборка дерева фида и tarball-ов по целям"
         run: |
+          set -euo pipefail
           mkdir -p gh-pages feed-tars
           # Дерево артефактов: artifacts/feed-<метка>/<arch>/<feedname>/...
           # В gh-pages: <версия SDK>/<метка>/packages/... — как в docs/INSTALL.md
@@ -96,34 +176,49 @@ jobs:
             [ -d "$art" ] || continue
             label="$(basename "$art" | sed 's/^feed-//')"
             pkgdir="$(find "$art" -type d -name lavray | head -n1)"
-            [ -n "$pkgdir" ] || pkgdir="$(find "$art" -type d -name packages | head -n1)"
-            test -n "$pkgdir" || { echo "::error title=Нет пакетов::в $art нет каталога пакетов"; exit 1; }
+            test -n "$pkgdir" || { echo "::error title=Нет пакетов::в $art нет каталога lavray"; exit 1; }
+            # Аудит №5 P1-1: ровно 3 ipk, Packages и подпись на месте —
+            # никакого fallback на базовый индекс SDK.
+            ipkc="$(find "$pkgdir" -maxdepth 1 -name '*.ipk' -size +1k | wc -l)"
+            test "$ipkc" -eq 3 || { echo "::error title=Пакеты::в $art $ipkc ipk, ожидалось 3"; exit 1; }
+            test -f "$pkgdir/Packages"    || { echo "::error title=Индекс::в $art нет Packages"; exit 1; }
+            test -f "$pkgdir/Packages.sig" || { echo "::error title=Подпись::в $art нет Packages.sig"; exit 1; }
             (cd "$pkgdir" && tar -czf "$OLDPWD/feed-tars/lavray-feed-$SDK_VERSION-$label.tar.gz" .)
             mkdir -p "gh-pages/$SDK_VERSION/$label/packages"
             cp "$pkgdir"/* "gh-pages/$SDK_VERSION/$label/packages/"
           done
-          # Открытый ключ фида для роутеров (opkg-key add)
-          [ -f feed/key.pub ] && cp feed/key.pub gh-pages/key.pub
+          # Открытый ключ фида для роутеров (opkg-key add) — обязателен.
+          test -f feed/key.pub || { echo "::error::нет feed/key.pub в теге"; exit 1; }
+          cp feed/key.pub gh-pages/key.pub
           find gh-pages -type f | sort | head -30
           ls -la feed-tars/
 
-      - name: "gh-pages: публикация фида"
-        working-directory: gh-pages
-        # persist-credentials от actions/checkout даёт push без токена в URL
-        # (аудит №1 P3-2: токен в argv виден в ps на раннере).
+      # Аудит №5 P2-1: не затирать существующее дерево целиком — фетчим
+      # gh-pages и обновляем только каталог $SDK_VERSION/<метка>/packages;
+      # «Re-run» старого тега и параллельные теги больше не регрессируют фид.
+      - name: "gh-pages: точечная публикация фида"
+        env:
+          # Аудит №5 P3-1: ref_name через step-env — без интерполяции в shell.
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          git init -q -b gh-pages
+          set -euo pipefail
+          if git fetch origin gh-pages 2>/dev/null; then
+            git checkout -q -B gh-pages origin/gh-pages
+          else
+            git init -q -b gh-pages
+          fi
           git config user.name "lavray-openwrt-ci"
           git config user.email "noreply@github.com"
           git add -A
-          git commit -qm "feed: ${{ github.ref_name }}"
+          git commit -qm "feed: $REF_NAME"
           git push -qf origin gh-pages
-          echo "фид: https://${{ github.repository_owner }}.github.io/${GITHUB_REPOSITORY#*/}/"
+          echo "фид: https://${GITHUB_REPOSITORY#*/}/"
 
       - name: "Релиз lavray-openwrt: tarball фида по целям"
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           name: "OpenWrt feed ${{ github.ref_name }}"
           files: |
             feed-tars/*.tar.gz
+          fail_on_unmatched_files: true
           generate_release_notes: true

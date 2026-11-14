@@ -1,0 +1,7 @@
+# Обновление pinned-версий GitHub Actions (аудит №5 P1-2: пины по SHA).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

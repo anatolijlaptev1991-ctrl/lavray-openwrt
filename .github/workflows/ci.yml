@@ -1,5 +1,6 @@
 # CI LAVRay (OpenWrt): быстрые проверки репозитория. Сборка ipk в SDK —
 # отдельный workflow release-packages.yml (тяжёлая, по тегу или вручную).
+# Actions запинены по commit SHA (аудит №5 P1-2); обновление — Dependabot.
 
 name: CI
 
@@ -11,21 +12,28 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     name: Линт структуры и Markdown
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Проверка структуры репозитория
         run: |
           set -eu
           test -f LICENSE    || { echo "Нет LICENSE"; exit 1; }
           test -f README.md || { echo "Нет README.md"; exit 1; }
+          test -f .gitignore || { echo "Нет .gitignore"; exit 1; }
           test -f .github/workflows/ci.yml || { echo "Нет ci.yml"; exit 1; }
           test -f .github/ISSUE_TEMPLATE/bug_report.md    || { echo "Нет bug_report.md"; exit 1; }
           test -f .github/ISSUE_TEMPLATE/feature_request.md || { echo "Нет feature_request.md"; exit 1; }
+          test -f feed/key.pub || { echo "Нет feed/key.pub (публичный ключ фида)"; exit 1; }
           echo "Структура OK"
 
       - name: Проверка Markdown
@@ -45,8 +53,9 @@ jobs:
   packages:
     name: "Пакеты: синтаксис, JSON, ucode, структура"
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: "Shell: sh -n по всем скриптам и файлам службы"
         run: |
@@ -62,6 +71,7 @@ jobs:
 
       - name: "JSON: menu.d и acl.d"
         run: |
+          set -euo pipefail
           for f in $(git ls-files '*.json'); do
             echo "json $f"
             python3 -m json.tool "$f" > /dev/null
@@ -73,6 +83,7 @@ jobs:
 
       - name: "ucode: rpcd-плагин — структурные проверки"
         run: |
+          set -euo pipefail
           f=luci-app-lavray/files/usr/share/rpcd/ucode/lavray
           grep -q "return { lavray:" "$f"
           for m in get_status get_web get_gateway get_setup_code get_policies \
@@ -86,6 +97,9 @@ jobs:
             echo "FAIL: токен ядра утекает в ответ rpcd" >&2
             exit 1
           fi
+          # Аудит №4 P2-2: временные файлы с токеном — в каталоге 0700.
+          grep -q '/var/run/lavray/rpc' "$f" || {
+            echo "FAIL: временные файлы с токеном не в 0700-каталоге" >&2; exit 1; }
           echo "ucode структура OK"
 
       - name: "Структура пакетов (спецификация §3)"
@@ -97,13 +111,16 @@ jobs:
           test -f lavrayd/files/lavrayd-uci-defaults
           test -f lavrayd/files/lavray.nft
           test -f lavrayd/files/lavray-guard
+          test -f lavrayd/files/lavrayd.keep
           test -f lavray-webui/Makefile
           test -f luci-app-lavray/Makefile
           test -f luci-app-lavray/files/usr/share/luci/menu.d/luci-app-lavray.json
           test -f luci-app-lavray/files/usr/share/rpcd/acl.d/luci-app-lavray.json
           test -f luci-app-lavray/files/usr/share/rpcd/ucode/lavray
           test -f luci-app-lavray/files/www/luci-static/resources/view/lavray/status.js
-          [ -f feed/key.pub ] || echo "note: feed/key.pub появится после workflow feed-key"
+          # Аудит №1 P2-1/P3-4(в): key.pub обязателен и коммичен (не «появится
+          # после workflow» — feed-key.yml удалён по P1-1).
+          test -f feed/key.pub || { echo "Нет feed/key.pub"; exit 1; }
           echo "структура OK"
 
       - name: "Секреты в репозитории отсутствуют"
